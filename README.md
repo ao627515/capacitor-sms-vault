@@ -1,6 +1,10 @@
 # capacitor-sms-vault
 
-Generalist Capacitor plugin for reading, intercepting and exporting SMS on AndroidInstalling dependencies.
+Plugin Capacitor généraliste pour Android — lecture de l'historique SMS, interception en temps réel et export JSON structuré. Conçu comme une brique bas niveau et neutre, sans logique métier embarquée.
+
+[![npm version](https://img.shields.io/npm/v/capacitor-sms-vault)](https://www.npmjs.com/package/capacitor-sms-vault)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 
 ## Install
 
@@ -22,7 +26,104 @@ Sync native files
 npx cap sync
 ```
 
-## API
+## Configuration Android
+
+### 1. Permissions dans le Manifest de l'app hôte
+
+Ajouter dans `android/app/src/main/AndroidManifest.xml` de **votre application** :
+
+```xml
+<uses-permission android:name="android.permission.READ_SMS" />
+<uses-permission android:name="android.permission.RECEIVE_SMS" />
+```
+
+### 2. App SMS par défaut (requis pour `READ_SMS` sur Android 10+)
+
+Sur Android 10+, votre application doit être l'application SMS par défaut pour accéder à l'historique SMS. Utilisez `requestDefaultSmsApp()` pour déclencher le dialogue système.
+
+> ⚠️ **Note Google Play** : Les permissions `READ_SMS` et `RECEIVE_SMS` nécessitent une déclaration dans la Play Console (formulaire « Permissions Declaration »). Voir [§ Conformité Google Play](#conformit-google-play).
+
+## Exemples d'utilisation
+
+### Vérifier et demander les permissions
+
+```typescript
+import { SmsVault } from 'capacitor-sms-vault';
+
+const status = await SmsVault.checkPermissions();
+
+if (status.readSms !== 'granted' || status.receiveSms !== 'granted') {
+  const result = await SmsVault.requestPermissions();
+  console.log('Permissions accordées :', result);
+}
+```
+
+### Vérifier et demander l'app SMS par défaut
+
+```typescript
+const { isDefault } = await SmsVault.isDefaultSmsApp();
+
+if (!isDefault) {
+  // Ouvre le dialogue système (Android 10+ : RoleManager, Android 6-9 : intent)
+  const result = await SmsVault.requestDefaultSmsApp();
+  console.log('App par défaut :', result.isDefault);
+}
+```
+
+### Lire l'historique SMS
+
+```typescript
+// 20 derniers SMS
+const { messages } = await SmsVault.getSmsList({ limit: 20 });
+
+// SMS des 7 derniers jours d'un expéditeur
+const { messages: recent } = await SmsVault.getSmsList({
+  address: '+33612345678',
+  since: Date.now() - 7 * 24 * 60 * 60 * 1000,
+  limit: 50,
+});
+
+messages.forEach(sms => {
+  console.log(`[${new Date(sms.date).toISOString()}] ${sms.address}: ${sms.body}`);
+});
+```
+
+### Intercepter les SMS en temps réel
+
+```typescript
+// 1. Enregistrer le listener
+const handle = await SmsVault.addListener('smsReceived', (sms) => {
+  console.log('SMS reçu de', sms.address, ':', sms.body);
+});
+
+// 2. Démarrer l'écoute
+await SmsVault.startListening();
+
+// 3. Plus tard, nettoyer
+await SmsVault.stopListening();
+await handle.remove();
+// ou : await SmsVault.removeAllListeners();
+```
+
+## Conformité Google Play
+
+> ⚠️ **Important** : Les permissions `READ_SMS` et `RECEIVE_SMS` font partie des permissions sensibles soumises à une procédure de validation par Google.
+
+- La déclaration dans la **Play Console** (formulaire « Permissions Declaration ») est de la responsabilité de **l'application hôte**, pas du plugin.
+- Pour accéder à `READ_SMS`, l'application doit être déclarée **application SMS par défaut** ou justifier un usage conforme à la politique de Google.
+- Le plugin lui-même ne fait aucun appel réseau et ne stocke aucune donnée — il lit et transmet uniquement.
+- Référence : [Politique Google Play sur les permissions SMS/Call Log](https://support.google.com/googleplay/android-developer/answer/9047303)
+
+## Compatibilité
+
+| Capacitor | Android | Support |
+|---|---|---|
+| 7.x | API 23+ (Android 6.0+) | ✅ |
+| 8.x | API 23+ (Android 6.0+) | ✅ |
+| ≤ 6.x | — | ❌ Migrer vers Capacitor 7+ |
+| iOS | — | ❌ Non supporté (Apple n'autorise pas la lecture SMS) |
+
+
 
 <docgen-index>
 
