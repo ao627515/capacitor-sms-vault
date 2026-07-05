@@ -43,6 +43,39 @@ Sur Android 10+, votre application doit être l'application SMS par défaut pour
 
 > ⚠️ **Note Google Play** : Les permissions `READ_SMS` et `RECEIVE_SMS` nécessitent une déclaration dans la Play Console (formulaire « Permissions Declaration »). Voir [§ Conformité Google Play](#conformit-google-play).
 
+### 3. Test en sideload (APK installé hors Play Store)
+
+> 🚧 **Ce n'est pas un bug du plugin.** C'est une restriction système Android intentionnelle.
+
+Depuis **Android 13**, Google restreint automatiquement les permissions sensibles (`READ_SMS`, `RECEIVE_SMS`) pour toute application installée en sideload (APK direct, hors Play Store). Vous verrez ce message :
+
+> *"L'accès au statut Application de SMS par défaut a été refusé. Cette appli a demandé l'accès à des autorisations sensibles…"*
+
+Référence officielle Google : https://support.google.com/android/answer/12623953
+
+#### Débloquer manuellement (développeurs)
+
+Il n'existe **aucun code, aucun flag Manifest** qui contourne cette restriction — elle est appliquée au niveau de l'installeur Android, pas de l'application.
+
+Procédure manuelle à effectuer **après chaque réinstallation** de l'APK :
+
+1. **Appui long** sur l'icône de l'application
+2. **App info** (ou Infos sur l'appli)
+3. Menu **⋮** (trois points) en haut à droite
+4. **Allow restricted settings** (Autoriser les paramètres restreints)
+5. Revenir dans **Permissions → SMS → Autoriser**
+
+> ⚠️ Ce flag se remet à zéro à chaque réinstallation ou mise à jour de l'APK.
+
+#### Solutions selon votre contexte
+
+| Contexte | Solution |
+|---|---|
+| **Dev / test personnel** | Procédure manuelle "Allow restricted settings" ci-dessus |
+| **Distribution interne / entreprise** | MDM (Mobile Device Management) — peut pré-autoriser les permissions |
+| **Distribution publique** | Publier sur le Play Store avec le formulaire SMS Permissions Declaration |
+| **Store alternatif** | Utiliser un store qui déploie via l'API session-based installer (ex. F-Droid) |
+
 ## Exemples d'utilisation
 
 ### Vérifier et demander les permissions
