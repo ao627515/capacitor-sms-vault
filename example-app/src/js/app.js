@@ -1,85 +1,443 @@
 import { SmsVault } from 'capacitor-sms-vault';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Utilitaires UI
-// ─────────────────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// LOGGER — console globale centralisée
+// ══════════════════════════════════════════════════════════════════════════════
 
-function setBadge(id, value) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = value;
-  el.className = 'status-badge ' + (
-    value === 'granted' ? 'granted' :
-    value === 'denied'  ? 'denied'  :
-    value === 'Oui' || value === 'true' ? 'granted' :
-    value === 'Non' || value === 'false' ? 'denied'  : 'prompt'
-  );
+const logList = document.getElementById('logList');
+let logCount = 0;
+
+function timestamp() {
+  return new Date().toLocaleTimeString('fr-FR', { hour12: false });
 }
 
-function renderSmsList(containerId, messages) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
+function addLog(icon, method, args, resultText, type = 'ok') {
+  logCount++;
 
-  if (!messages || messages.length === 0) {
-    container.innerHTML = '<p class="empty-state">Aucun SMS trouvé</p>';
-    return;
-  }
+  const logEmpty = logList.querySelector('.log-empty');
+  if (logEmpty) logEmpty.remove();
 
-  container.innerHTML = messages.map(sms => `
-    <ion-item>
-      <ion-label class="ion-text-wrap">
-        <p class="sms-address">${escapeHtml(sms.address || '(inconnu)')}</p>
-        <p class="sms-body">${escapeHtml((sms.body || '').substring(0, 120))}${sms.body && sms.body.length > 120 ? '…' : ''}</p>
-        <p class="sms-date">${new Date(sms.date).toLocaleString('fr-FR')}</p>
-      </ion-label>
-      <ion-badge slot="end" color="${sms.type === 'sent' ? 'medium' : 'primary'}">${sms.type}</ion-badge>
-    </ion-item>
-  `).join('');
-}
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
 
-function prependLiveSms(sms) {
-  const container = document.getElementById('liveContainer');
-  if (!container) return;
+  const argsStr = args && Object.keys(args).length > 0
+    ? '(' + JSON.stringify(args) + ')'
+    : '()';
 
-  // Supprimer le message "vide" si présent
-  const empty = container.querySelector('.empty-state');
-  if (empty) empty.remove();
+  const resultClass = type === 'ok' ? 'log-result-ok'
+    : type === 'event' ? 'log-result-event'
+    : 'log-result-err';
 
-  const item = document.createElement('ion-item');
-  item.innerHTML = `
-    <ion-label class="ion-text-wrap">
-      <p class="sms-address"><span class="live-badge"></span>${escapeHtml(sms.address || '(inconnu)')}</p>
-      <p class="sms-body">${escapeHtml(sms.body || '')}</p>
-      <p class="sms-date">${new Date(sms.date).toLocaleString('fr-FR')}</p>
-    </ion-label>
-    <ion-badge slot="end" color="success">nouveau</ion-badge>
+  entry.innerHTML = `
+    <span class="log-time">${timestamp()}</span>
+    <span class="log-icon">${icon}</span>
+    <div class="log-body">
+      <span class="log-method">${escapeHtml(method)}</span><span class="log-args">${escapeHtml(argsStr)}</span>
+      <br><span class="${resultClass}">→ ${escapeHtml(String(resultText))}</span>
+    </div>
   `;
-  container.prepend(item);
+
+  logList.prepend(entry);
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UTILITIES
+// ══════════════════════════════════════════════════════════════════════════════
 
 function escapeHtml(str) {
-  return String(str)
+  return String(str ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
 
-async function showToast(message, color = 'dark') {
-  const toast = document.createElement('ion-toast');
-  toast.message = message;
-  toast.duration = 2500;
-  toast.color = color;
-  toast.position = 'bottom';
-  document.body.appendChild(toast);
-  await toast.present();
+function toast(message, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = message;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 2700);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// F1 + F2 : Permissions & Default SMS App
-// ─────────────────────────────────────────────────────────────────────────────
+function setBadge(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = value;
+  el.className = 'badge ' + (
+    value === 'granted'                    ? 'badge-granted' :
+    value === 'denied'                     ? 'badge-denied'  :
+    value === 'prompt' || value === 'prompt-with-rationale' ? 'badge-prompt' :
+    value === 'Oui'                        ? 'badge-yes'     :
+    value === 'Non'                        ? 'badge-no'      : 'badge-unknown'
+  );
+}
 
+function formatDate(ts) {
+  return new Date(ts).toLocaleString('fr-FR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+}
+
+function formatShortTime(ts) {
+  return new Date(ts).toLocaleTimeString('fr-FR', { hour12: false });
+}
+
+function renderSmsCard(sms, isNew = false) {
+  const card = document.createElement('div');
+  card.className = 'sms-card';
+  card.innerHTML = `
+    <div class="sms-card-head">
+      <span class="sms-address">${escapeHtml(sms.address || '(inconnu)')}</span>
+      <span class="sms-type-badge ${sms.type}">${sms.type}</span>
+      ${sms.id ? `<span class="sms-id">id:${escapeHtml(sms.id)}</span>` : ''}
+    </div>
+    <div class="sms-body">${escapeHtml(sms.body || '(vide)')}</div>
+    <div class="sms-date">${isNew ? '🟢 ' + formatShortTime(sms.date) : formatDate(sms.date)}</div>
+  `;
+  return card;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB NAVIGATION
+// ══════════════════════════════════════════════════════════════════════════════
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.tab;
+
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+
+    btn.classList.add('active');
+    document.getElementById(`tab-${target}`)?.classList.add('active');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB 1 — PERMISSIONS
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function refreshPermissionBadges() {
+  const status = await SmsVault.checkPermissions();
+  setBadge('statusReadSms', status.readSms);
+  setBadge('statusReceiveSms', status.receiveSms);
+  return status;
+}
+
+async function refreshDefaultBadge() {
+  const { isDefault } = await SmsVault.isDefaultSmsApp();
+  setBadge('statusDefault', isDefault ? 'Oui' : 'Non');
+  return isDefault;
+}
+
+// checkPermissions
 document.getElementById('btnCheckPerms').addEventListener('click', async () => {
+  try {
+    const status = await refreshPermissionBadges();
+    const { isDefault } = await SmsVault.isDefaultSmsApp();
+    setBadge('statusDefault', isDefault ? 'Oui' : 'Non');
+    addLog('🔍', 'checkPermissions', {}, JSON.stringify(status));
+    toast('Permissions vérifiées', 'info');
+  } catch (e) {
+    addLog('🔍', 'checkPermissions', {}, e.message, 'err');
+    toast(e.message, 'error');
+  }
+});
+
+// requestPermissions
+document.getElementById('btnRequestPerms').addEventListener('click', async () => {
+  try {
+    const status = await SmsVault.requestPermissions();
+    setBadge('statusReadSms', status.readSms);
+    setBadge('statusReceiveSms', status.receiveSms);
+    addLog('🔑', 'requestPermissions', {}, JSON.stringify(status));
+    toast('Permissions : ' + status.readSms + ' / ' + status.receiveSms,
+      status.readSms === 'granted' ? 'success' : 'warn');
+  } catch (e) {
+    addLog('🔑', 'requestPermissions', {}, e.message, 'err');
+    toast(e.message, 'error');
+  }
+});
+
+// isDefaultSmsApp
+document.getElementById('btnIsDefault').addEventListener('click', async () => {
+  try {
+    const isDefault = await refreshDefaultBadge();
+    addLog('❓', 'isDefaultSmsApp', {}, '{ isDefault: ' + isDefault + ' }');
+    toast('App par défaut : ' + (isDefault ? 'Oui ✓' : 'Non'), isDefault ? 'success' : 'warn');
+  } catch (e) {
+    addLog('❓', 'isDefaultSmsApp', {}, e.message, 'err');
+    toast(e.message, 'error');
+  }
+});
+
+// requestDefaultSmsApp
+document.getElementById('btnRequestDefault').addEventListener('click', async () => {
+  try {
+    const { isDefault } = await SmsVault.requestDefaultSmsApp();
+    setBadge('statusDefault', isDefault ? 'Oui' : 'Non');
+    addLog('⭐', 'requestDefaultSmsApp', {}, '{ isDefault: ' + isDefault + ' }');
+    toast(isDefault ? 'Définie comme app SMS par défaut ✓' : 'Changement annulé',
+      isDefault ? 'success' : 'warn');
+  } catch (e) {
+    addLog('⭐', 'requestDefaultSmsApp', {}, e.message, 'err');
+    toast(e.message, 'error');
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB 2 — SMS LIST
+// ══════════════════════════════════════════════════════════════════════════════
+
+// — Slider limit
+const filterLimit = document.getElementById('filterLimit');
+const filterLimitValue = document.getElementById('filterLimitValue');
+filterLimit.addEventListener('input', () => {
+  filterLimitValue.textContent = filterLimit.value;
+});
+
+// — Since toggle
+const filterSinceToggle = document.getElementById('filterSinceToggle');
+const filterSinceField = document.getElementById('filterSinceField');
+filterSinceToggle.addEventListener('change', () => {
+  filterSinceField.style.display = filterSinceToggle.checked ? 'block' : 'none';
+  if (filterSinceToggle.checked && !document.getElementById('filterSince').value) {
+    // Pré-remplir avec il y a 7 jours
+    const d = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+    document.getElementById('filterSince').value =
+      d.toISOString().slice(0, 16);
+  }
+});
+
+// — Type radio
+let selectedType = 'all';
+document.querySelectorAll('.radio-btn[data-type]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.radio-btn[data-type]').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedType = btn.dataset.type;
+  });
+});
+
+// — Reset
+document.getElementById('btnResetFilters').addEventListener('click', () => {
+  document.getElementById('filterAddress').value = '';
+  document.getElementById('filterSinceToggle').checked = false;
+  filterSinceField.style.display = 'none';
+  filterLimit.value = 20;
+  filterLimitValue.textContent = '20';
+  selectedType = 'all';
+  document.querySelectorAll('.radio-btn[data-type]').forEach(b => b.classList.remove('selected'));
+  document.querySelector('.radio-btn[data-type="all"]').classList.add('selected');
+
+  document.getElementById('smsResults').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">📬</div>
+      Filtres réinitialisés — lancez une nouvelle recherche
+    </div>`;
+});
+
+// — Rechercher
+document.getElementById('btnGetSmsList').addEventListener('click', async () => {
+  const btn = document.getElementById('btnGetSmsList');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Chargement…';
+
+  const options = {};
+  const address = document.getElementById('filterAddress').value.trim();
+  if (address) options.address = address;
+
+  if (filterSinceToggle.checked) {
+    const sinceVal = document.getElementById('filterSince').value;
+    if (sinceVal) options.since = new Date(sinceVal).getTime();
+  }
+
+  options.limit = parseInt(filterLimit.value, 10);
+
+  try {
+    let { messages } = await SmsVault.getSmsList(options);
+
+    // Filtre type côté client (le plugin ne supporte pas encore ce filtre nativement)
+    if (selectedType !== 'all') {
+      messages = messages.filter(m => m.type === selectedType);
+    }
+
+    addLog('🔍', 'getSmsList', options, `${messages.length} messages`);
+    renderSmsResults(messages, options);
+    toast(`${messages.length} SMS chargés`, 'success');
+  } catch (e) {
+    addLog('🔍', 'getSmsList', options, e.message, 'err');
+    document.getElementById('smsResults').innerHTML = `
+      <div class="empty-state" style="color:#f87171">
+        <div class="empty-icon">❌</div>
+        ${escapeHtml(e.message)}
+      </div>`;
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🔍 Rechercher';
+  }
+});
+
+function renderSmsResults(messages, options) {
+  const container = document.getElementById('smsResults');
+
+  if (messages.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🔍</div>
+        Aucun SMS trouvé avec ces filtres
+      </div>`;
+    return;
+  }
+
+  const jsonRaw = JSON.stringify({ messages }, null, 2);
+
+  container.innerHTML = '';
+
+  // Barre de résultats
+  const bar = document.createElement('div');
+  bar.className = 'result-bar';
+  bar.innerHTML = `
+    <span class="result-count"><strong>${messages.length}</strong> SMS trouvés</span>
+    <div class="result-actions">
+      <button class="btn btn-ghost btn-sm" id="btnToggleJson">{ } JSON</button>
+      <button class="btn btn-ghost btn-sm" id="btnCopyJson">📋 Copier</button>
+    </div>
+  `;
+  container.appendChild(bar);
+
+  // JSON brut (caché par défaut)
+  const jsonBlock = document.createElement('pre');
+  jsonBlock.className = 'json-block';
+  jsonBlock.textContent = jsonRaw;
+  container.appendChild(jsonBlock);
+
+  // Toggle JSON
+  bar.querySelector('#btnToggleJson').addEventListener('click', () => {
+    jsonBlock.classList.toggle('visible');
+  });
+
+  // Copier JSON
+  bar.querySelector('#btnCopyJson').addEventListener('click', () => {
+    navigator.clipboard?.writeText(jsonRaw)
+      .then(() => toast('JSON copié ✓', 'success'))
+      .catch(() => toast('Copie non supportée sur ce device', 'warn'));
+  });
+
+  // Cards SMS
+  messages.forEach(sms => {
+    container.appendChild(renderSmsCard(sms));
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB 3 — LIVE
+// ══════════════════════════════════════════════════════════════════════════════
+
+let liveListener = null;
+let liveCount = 0;
+let isListening = false;
+
+const btnToggleListen = document.getElementById('btnToggleListen');
+const liveDot = document.getElementById('liveDot');
+const liveStatus = document.getElementById('liveStatus');
+const liveCounter = document.getElementById('liveCounter');
+const liveList = document.getElementById('liveList');
+
+function updateLiveUI() {
+  if (isListening) {
+    liveDot.classList.add('active');
+    liveStatus.textContent = 'Écoute active…';
+    liveStatus.style.color = 'var(--green)';
+    btnToggleListen.className = 'btn btn-danger';
+    btnToggleListen.innerHTML = '⏹ stopListening()';
+  } else {
+    liveDot.classList.remove('active');
+    liveStatus.textContent = 'Écoute inactive';
+    liveStatus.style.color = '';
+    btnToggleListen.className = 'btn btn-success';
+    btnToggleListen.innerHTML = '▶ startListening()';
+  }
+  liveCounter.textContent = `${liveCount} reçu${liveCount > 1 ? 's' : ''}`;
+}
+
+btnToggleListen.addEventListener('click', async () => {
+  btnToggleListen.disabled = true;
+  try {
+    if (!isListening) {
+      // Démarrer
+      liveListener = await SmsVault.addListener('smsReceived', (sms) => {
+        liveCount++;
+        updateLiveUI();
+        addLog('📡', 'event:smsReceived', {}, `from ${sms.address}`, 'event');
+
+        // Supprimer l'empty state si présent
+        const empty = liveList.querySelector('.empty-state');
+        if (empty) empty.remove();
+
+        liveList.prepend(renderSmsCard(sms, true));
+      });
+      await SmsVault.startListening();
+      isListening = true;
+      addLog('▶', 'startListening', {}, 'OK');
+      toast('Écoute SMS démarrée', 'success');
+    } else {
+      // Arrêter
+      await SmsVault.stopListening();
+      if (liveListener) {
+        await liveListener.remove();
+        liveListener = null;
+      }
+      isListening = false;
+      addLog('⏹', 'stopListening', {}, 'OK');
+      toast('Écoute SMS arrêtée', 'info');
+    }
+    updateLiveUI();
+  } catch (e) {
+    addLog(isListening ? '⏹' : '▶', isListening ? 'stopListening' : 'startListening', {}, e.message, 'err');
+    toast(e.message, 'error');
+  } finally {
+    btnToggleListen.disabled = false;
+  }
+});
+
+document.getElementById('btnClearLive').addEventListener('click', () => {
+  liveCount = 0;
+  updateLiveUI();
+  liveList.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">📡</div>
+      Historique vidé — l'écoute continue si elle est active
+    </div>`;
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB 4 — LOGS
+// ══════════════════════════════════════════════════════════════════════════════
+
+document.getElementById('btnClearLogs').addEventListener('click', () => {
+  logCount = 0;
+  logList.innerHTML = '<div class="log-empty">Aucun appel plugin enregistré</div>';
+  toast('Logs effacés', 'info');
+});
+
+document.getElementById('btnCopyLogs').addEventListener('click', () => {
+  const entries = [...logList.querySelectorAll('.log-entry')].map(e => e.textContent.trim()).join('\n---\n');
+  if (!entries) { toast('Aucun log à copier', 'warn'); return; }
+  navigator.clipboard?.writeText(entries)
+    .then(() => toast('Logs copiés ✓', 'success'))
+    .catch(() => toast('Copie non supportée sur ce device', 'warn'));
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INIT — vérifier les permissions au démarrage
+// ══════════════════════════════════════════════════════════════════════════════
+
+(async () => {
   try {
     const status = await SmsVault.checkPermissions();
     setBadge('statusReadSms', status.readSms);
@@ -87,112 +445,10 @@ document.getElementById('btnCheckPerms').addEventListener('click', async () => {
 
     const { isDefault } = await SmsVault.isDefaultSmsApp();
     setBadge('statusDefault', isDefault ? 'Oui' : 'Non');
+
+    addLog('🚀', 'init:checkPermissions', {}, JSON.stringify(status));
   } catch (e) {
-    await showToast('Erreur : ' + e.message, 'danger');
+    // Silencieux au démarrage (normal sur web/émulateur)
+    addLog('🚀', 'init:checkPermissions', {}, e.message, 'err');
   }
-});
-
-document.getElementById('btnRequestPerms').addEventListener('click', async () => {
-  try {
-    const status = await SmsVault.requestPermissions();
-    setBadge('statusReadSms', status.readSms);
-    setBadge('statusReceiveSms', status.receiveSms);
-    await showToast('Permissions mises à jour', 'success');
-  } catch (e) {
-    await showToast('Erreur : ' + e.message, 'danger');
-  }
-});
-
-document.getElementById('btnRequestDefault').addEventListener('click', async () => {
-  try {
-    const { isDefault } = await SmsVault.requestDefaultSmsApp();
-    setBadge('statusDefault', isDefault ? 'Oui' : 'Non');
-    await showToast(
-      isDefault ? 'App définie comme SMS par défaut ✓' : 'Changement annulé',
-      isDefault ? 'success' : 'warning'
-    );
-  } catch (e) {
-    await showToast('Erreur : ' + e.message, 'danger');
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// F3 : Historique SMS
-// ─────────────────────────────────────────────────────────────────────────────
-
-document.getElementById('btnReadSms').addEventListener('click', async () => {
-  const limitEl = document.getElementById('smsLimit');
-  const limit = limitEl ? parseInt(limitEl.value, 10) : 10;
-  const container = document.getElementById('smsListContainer');
-
-  if (container) {
-    container.innerHTML = '<ion-item><ion-label>Chargement…</ion-label><ion-spinner slot="end"></ion-spinner></ion-item>';
-  }
-
-  try {
-    const { messages } = await SmsVault.getSmsList({ limit });
-    renderSmsList('smsListContainer', messages);
-    await showToast(`${messages.length} SMS chargés`, 'success');
-  } catch (e) {
-    if (container) {
-      container.innerHTML = `<p class="empty-state" style="color: var(--ion-color-danger)">Erreur : ${escapeHtml(e.message)}</p>`;
-    }
-    await showToast('Erreur lecture SMS : ' + e.message, 'danger');
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// F4 : Écoute temps réel
-// ─────────────────────────────────────────────────────────────────────────────
-
-let liveListener = null;
-
-document.getElementById('btnStartListen').addEventListener('click', async () => {
-  if (liveListener) {
-    await showToast('Déjà en cours d\'écoute', 'warning');
-    return;
-  }
-
-  try {
-    // Enregistrer le listener AVANT startListening pour ne pas manquer de SMS
-    liveListener = await SmsVault.addListener('smsReceived', (sms) => {
-      prependLiveSms(sms);
-    });
-
-    await SmsVault.startListening();
-
-    const statusEl = document.getElementById('listenStatus');
-    if (statusEl) {
-      statusEl.innerHTML = '<span class="live-badge"></span> Écoute active…';
-    }
-
-    await showToast('Écoute SMS démarrée', 'success');
-  } catch (e) {
-    // Nettoyer le listener si startListening a échoué
-    if (liveListener) {
-      await liveListener.remove();
-      liveListener = null;
-    }
-    await showToast('Erreur : ' + e.message, 'danger');
-  }
-});
-
-document.getElementById('btnStopListen').addEventListener('click', async () => {
-  try {
-    await SmsVault.stopListening();
-
-    if (liveListener) {
-      await liveListener.remove();
-      liveListener = null;
-    }
-
-    const statusEl = document.getElementById('listenStatus');
-    if (statusEl) {
-      statusEl.textContent = '⏸ Écoute arrêtée';
-    }
-
-    await showToast('Écoute SMS arrêtée', 'medium');
-  } catch (e) {
-    await showToast('Erreur : ' + e.message, 'danger');
-  }
-});
+})();
