@@ -1,26 +1,188 @@
 <!doctype html>
-<html lang="en" dir="ltr" class="hydrated">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Example Capacitor App</title>
+    <title>SMS Vault — Demo</title>
     <meta
       name="viewport"
       content="viewport-fit=cover, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
+    <meta name="description" content="Application de démonstration pour le plugin capacitor-sms-vault" />
     <meta name="format-detection" content="telephone=no" />
-  </head>
-  <body>
-    <main>
-      <h1>Capacitor Test Plugin Project</h1>
-      <p>
-        This project can be used to test out the functionality of your plugin. Nothing in the
-        <em>example-app/</em> folder will be published to npm when using this template, so you can create away!
-      </p>
-      <label for="echoInput">Echo Text:</label>
-      <input type="text" id="echoInput" name="echoInput" value="Hello World!" />
-      <button onclick="testEcho()">Click Me!</button>
-    </main>
 
-    <script src="./js/example.js" type="module"></script>
+    <!-- Ionic 7 via CDN -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@ionic/core@7/dist/ionic/ionic.esm.js"></script>
+    <script nomodule src="https://cdn.jsdelivr.net/npm/@ionic/core@7/dist/ionic/ionic.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@ionic/core@7/css/ionic.bundle.css" />
+
+    <style>
+      :root {
+        --ion-color-primary: #5c6bc0;
+        --ion-color-primary-rgb: 92,107,192;
+        --ion-color-primary-contrast: #ffffff;
+        --ion-color-primary-shade: #515ea9;
+        --ion-color-primary-tint: #6c7ac6;
+      }
+
+      ion-content {
+        --background: #f5f5f5;
+      }
+
+      .section-title {
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ion-color-medium);
+        padding: 16px 16px 4px;
+      }
+
+      .status-badge {
+        font-size: 0.8rem;
+        padding: 2px 8px;
+        border-radius: 12px;
+        background: var(--ion-color-light);
+        color: var(--ion-color-medium);
+      }
+
+      .status-badge.granted { background: #e8f5e9; color: #2e7d32; }
+      .status-badge.denied  { background: #ffebee; color: #c62828; }
+      .status-badge.prompt  { background: #fff8e1; color: #f57f17; }
+
+      .live-badge {
+        display: inline-block;
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: #4caf50;
+        margin-right: 6px;
+        animation: pulse 1.2s infinite;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+      }
+
+      .sms-address { font-weight: 600; font-size: 0.95rem; }
+      .sms-body    { color: var(--ion-color-medium-shade); white-space: pre-wrap; word-break: break-word; }
+      .sms-date    { font-size: 0.75rem; color: var(--ion-color-medium); }
+
+      .empty-state {
+        text-align: center;
+        padding: 32px 16px;
+        color: var(--ion-color-medium);
+      }
+    </style>
+  </head>
+
+  <body>
+    <ion-app>
+
+      <!-- HEADER -->
+      <ion-header>
+        <ion-toolbar color="primary">
+          <ion-title>📱 SMS Vault Demo</ion-title>
+        </ion-toolbar>
+      </ion-header>
+
+      <ion-content>
+
+        <!-- ── SECTION 1 : Permissions ─────────────────────────────── -->
+        <p class="section-title">Permissions & App par défaut</p>
+
+        <ion-card>
+          <ion-card-content>
+
+            <!-- Statut des permissions -->
+            <ion-item lines="none">
+              <ion-label>READ_SMS</ion-label>
+              <span slot="end" id="statusReadSms" class="status-badge prompt">?</span>
+            </ion-item>
+            <ion-item lines="none">
+              <ion-label>RECEIVE_SMS</ion-label>
+              <span slot="end" id="statusReceiveSms" class="status-badge prompt">?</span>
+            </ion-item>
+            <ion-item lines="full">
+              <ion-label>App SMS par défaut</ion-label>
+              <span slot="end" id="statusDefault" class="status-badge prompt">?</span>
+            </ion-item>
+
+            <ion-button id="btnCheckPerms" expand="block" class="ion-margin-top">
+              <ion-icon slot="start" name="shield-checkmark-outline"></ion-icon>
+              Vérifier permissions
+            </ion-button>
+
+            <ion-button id="btnRequestPerms" expand="block" fill="outline">
+              <ion-icon slot="start" name="key-outline"></ion-icon>
+              Demander permissions
+            </ion-button>
+
+            <ion-button id="btnRequestDefault" expand="block" color="secondary">
+              <ion-icon sl
+
+Do you want to proceed?ot="start" name="star-outline"></ion-icon>
+              Devenir app SMS par défaut
+            </ion-button>
+
+          </ion-card-content>
+        </ion-card>
+
+        <!-- ── SECTION 2 : Historique SMS ─────────────────────────── -->
+        <p class="section-title">Historique SMS</p>
+
+        <ion-card>
+          <ion-card-content>
+            <ion-item lines="none">
+              <ion-label>Nombre de SMS à lire</ion-label>
+              <ion-select id="smsLimit" value="10" interface="popover">
+                <ion-select-option value="5">5</ion-select-option>
+                <ion-select-option value="10">10</ion-select-option>
+                <ion-select-option value="25">25</ion-select-option>
+                <ion-select-option value="50">50</ion-select-option>
+              </ion-select>
+            </ion-item>
+
+            <ion-button id="btnReadSms" expand="block" class="ion-margin-top">
+              <ion-icon slot="start" name="mail-outline"></ion-icon>
+              Lire l'historique
+            </ion-button>
+
+            <div id="smsListContainer">
+              <p class="empty-state">Appuyez sur le bouton pour charger les SMS</p>
+            </div>
+          </ion-card-content>
+        </ion-card>
+
+        <!-- ── SECTION 3 : Écoute temps réel ──────────────────────── -->
+        <p class="section-title">Écoute temps réel</p>
+
+        <ion-card>
+          <ion-card-content>
+
+            <ion-item lines="full">
+              <ion-label id="listenStatus">⏸ Écoute arrêtée</ion-label>
+            </ion-item>
+
+            <ion-button id="btnStartListen" expand="block" color="success" class="ion-margin-top">
+              <ion-icon slot="start" name="radio-outline"></ion-icon>
+              Démarrer l'écoute
+            </ion-button>
+
+            <ion-button id="btnStopListen" expand="block" color="danger" fill="outline">
+              <ion-icon slot="start" name="stop-outline"></ion-icon>
+              Arrêter l'écoute
+            </ion-button>
+
+            <div id="liveContainer">
+              <p class="empty-state">Les SMS entrants apparaîtront ici</p>
+            </div>
+
+          </ion-card-content>
+        </ion-card>
+
+      </ion-content>
+
+    </ion-app>
+
+    <script src="./js/app.js" type="module"></script>
   </body>
 </html>
