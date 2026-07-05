@@ -1,5 +1,5 @@
 {
-  "appId": "com.example.plugin",
+  "appId": "com.oaalab.smsvaultdemo",
   "appName": "example-app",
   "webDir": "dist",
   "plugins": {

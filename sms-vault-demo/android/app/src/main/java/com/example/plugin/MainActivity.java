@@ -1,4 +1,4 @@
-package com.example.plugin;
+package com.oaalab.smsvaultdemo;
 
 import com.getcapacitor.BridgeActivity;
 
