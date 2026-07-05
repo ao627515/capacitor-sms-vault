@@ -1,7 +1,7 @@
 # Design Document — `capacitor-sms-vault` V1
 
 **Date** : 2026-07-05  
-**Scope** : Implémentation complète V1 (F1, F2, F3, F4, F6) + README + example-app Ionic  
+**Scope** : Implémentation complète V1 (F1, F2, F3, F4, F6) + README + sms-vault-demo Ionic  
 **Statut** : Approuvé
 
 ---
@@ -68,4 +68,4 @@ Chaque fichier a une responsabilité unique, conformément à l'arborescence du 
 | package.json | Corriger peerDependencies |
 | android/build.gradle | minSdkVersion → 23 |
 | README.md | Compléter après docgen |
-| example-app/ | Refaire en Ionic |
+| sms-vault-demo/ | Refaire en Ionic |

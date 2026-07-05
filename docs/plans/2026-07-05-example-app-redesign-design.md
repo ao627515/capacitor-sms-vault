@@ -1,12 +1,12 @@
 # Design Document — SmsVaultDemo Redesign
 
 **Date** : 2026-07-05
-**Scope** : Refonte complète de l'example-app — suppression Ionic, HTML/CSS/JS vanilla, dark mode, tab bar 4 onglets
+**Scope** : Refonte complète de l'sms-vault-demo — suppression Ionic, HTML/CSS/JS vanilla, dark mode, tab bar 4 onglets
 **Statut** : Approuvé
 
 ## Problème
 
-L'example-app actuelle utilise Ionic via CDN (dépendance externe), n'a que 3 boutons basiques, et ne permet pas de tester en profondeur les options de filtrage de `getSmsList`.
+L'sms-vault-demo actuelle utilise Ionic via CDN (dépendance externe), n'a que 3 boutons basiques, et ne permet pas de tester en profondeur les options de filtrage de `getSmsList`.
 
 ## Approche choisie : Single-file vanilla (Approche A)
 
@@ -27,5 +27,5 @@ L'example-app actuelle utilise Ionic via CDN (dépendance externe), n'a que 3 bo
 - Badges colorés pour les statuts de permission
 
 ## Fichiers modifiés
-- `example-app/src/index.html` : refonte complète
-- `example-app/src/js/app.js` : refonte complète
+- `sms-vault-demo/src/index.html` : refonte complète
+- `sms-vault-demo/src/js/app.js` : refonte complète
