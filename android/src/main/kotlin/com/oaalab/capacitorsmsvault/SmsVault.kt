@@ -1,12 +1,10 @@
 package com.oaalab.capacitorsmsvault
 
-import com.getcapacitor.Logger
-
-class SmsVault {
-
-    fun echo(value: String): String {
-        Logger.info("Echo", value)
-
-        return value
-    }
-}
+/**
+ * Stub conservé pour compatibilité Gradle.
+ * La logique SMS est dans SmsReader, SmsReceiver et SmsVaultPlugin.
+ *
+ * @deprecated Remplacé par SmsReader
+ */
+@Deprecated("Use SmsReader instead")
+class SmsVault
