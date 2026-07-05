@@ -38,4 +38,10 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- capacitor-sms-vault : requis pour F1/F3 (lecture SMS) -->
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <!-- capacitor-sms-vault : requis pour F4 (interception temps réel) -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+
 </manifest>
