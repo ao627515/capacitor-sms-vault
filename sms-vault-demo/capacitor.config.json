@@ -1,6 +1,6 @@
 {
   "appId": "com.oaalab.smsvaultdemo",
-  "appName": "example-app",
+  "appName": "sms-vault-demo",
   "webDir": "dist",
   "plugins": {
     "SplashScreen": {
