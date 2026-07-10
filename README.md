@@ -33,8 +33,13 @@ npx cap sync
 Ajouter dans `android/app/src/main/AndroidManifest.xml` de **votre application** :
 
 ```xml
+<!-- Requis pour l'historique et réception de SMS (V1) -->
 <uses-permission android:name="android.permission.READ_SMS" />
 <uses-permission android:name="android.permission.RECEIVE_SMS" />
+
+<!-- Requis pour la détection SIM / Numéro (F8 - V2) -->
+<uses-permission android:name="android.permission.READ_PHONE_STATE" />
+<uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
 ```
 
 ### 2. App SMS par défaut (requis pour `READ_SMS` sur Android 10+)
@@ -172,6 +177,27 @@ const handle = await SmsVault.addListener('otpReceived', (data) => {
 
 // 2. Lancer l'écouteur (valide pour un seul message, max 5 minutes)
 await SmsVault.startSmsRetriever();
+```
+
+### Détecter les cartes SIM actives (F8)
+
+Récupère les informations des cartes SIM actives et leurs numéros de téléphone si disponibles (sans garantie pour le numéro de téléphone qui dépend de l'opérateur).
+
+```typescript
+// Demander la permission phone si nécessaire
+const status = await SmsVault.requestPermissions();
+if (status.phone === 'granted') {
+  const { simCards } = await SmsVault.getSimInfo();
+  
+  simCards.forEach(sim => {
+    console.log(`SIM ${sim.simSlotIndex}: ${sim.carrierName} (${sim.countryIso})`);
+    if (sim.phoneNumber) {
+      console.log(`Numéro détecté : ${sim.phoneNumber}`);
+    } else {
+      console.log(`Numéro non stocké sur la carte SIM`);
+    }
+  });
+}
 ```
 
 ## Conformité Google Play

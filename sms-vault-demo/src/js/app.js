@@ -124,6 +124,7 @@ async function refreshPermissionBadges() {
   const status = await SmsVault.checkPermissions();
   setBadge('statusReadSms', status.readSms);
   setBadge('statusReceiveSms', status.receiveSms);
+  setBadge('statusPhone', status.phone);
   return status;
 }
 
@@ -153,8 +154,9 @@ document.getElementById('btnRequestPerms').addEventListener('click', async () =>
     const status = await SmsVault.requestPermissions();
     setBadge('statusReadSms', status.readSms);
     setBadge('statusReceiveSms', status.receiveSms);
+    setBadge('statusPhone', status.phone);
     addLog('🔑', 'requestPermissions', {}, JSON.stringify(status));
-    toast('Permissions : ' + status.readSms + ' / ' + status.receiveSms,
+    toast('Permissions : ' + status.readSms + ' / ' + status.receiveSms + ' / ' + status.phone,
       status.readSms === 'granted' ? 'success' : 'warn');
   } catch (e) {
     addLog('🔑', 'requestPermissions', {}, e.message, 'err');
@@ -184,6 +186,35 @@ document.getElementById('btnRequestDefault').addEventListener('click', async () 
       isDefault ? 'success' : 'warn');
   } catch (e) {
     addLog('⭐', 'requestDefaultSmsApp', {}, e.message, 'err');
+    toast(e.message, 'error');
+  }
+});
+
+// getSimInfo
+document.getElementById('btnGetSimInfo').addEventListener('click', async () => {
+  const resultDiv = document.getElementById('simInfoResult');
+  resultDiv.innerHTML = '<span class="spinner"></span> Chargement…';
+  try {
+    const { simCards } = await SmsVault.getSimInfo();
+    addLog('📱', 'getSimInfo', {}, `${simCards.length} cartes SIM`);
+    
+    if (simCards.length === 0) {
+      resultDiv.innerHTML = '<div style="color: var(--yellow)">Aucune carte SIM active détectée.</div>';
+      return;
+    }
+
+    resultDiv.innerHTML = simCards.map(sim => `
+      <div style="background: var(--surface2); border: 1px solid var(--border); padding: 8px; border-radius: var(--radius-sm); margin-bottom: 6px; text-align: left;">
+        <strong>Opérateur :</strong> ${escapeHtml(sim.carrierName)}<br>
+        <strong>Pays :</strong> ${escapeHtml(sim.countryIso).toUpperCase()}<br>
+        <strong>Slot :</strong> ${sim.simSlotIndex}<br>
+        <strong>ID Abonnement :</strong> ${sim.subscriptionId}<br>
+        <strong>Numéro :</strong> ${sim.phoneNumber ? escapeHtml(sim.phoneNumber) : '<span style="color: var(--text-dim); font-style: italic;">non disponible</span>'}
+      </div>
+    `).join('');
+  } catch (e) {
+    addLog('📱', 'getSimInfo', {}, e.message, 'err');
+    resultDiv.innerHTML = `<div style="color: var(--red)">Erreur: ${escapeHtml(e.message)}</div>`;
     toast(e.message, 'error');
   }
 });

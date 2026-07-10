@@ -5,10 +5,12 @@ import android.content.Context
 import android.content.IntentFilter
 import android.os.Build
 import android.provider.Telephony
+import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Logger
 import com.getcapacitor.PermissionState
 import com.getcapacitor.Plugin
+import android.telephony.SubscriptionManager
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.ActivityCallback
@@ -42,6 +44,13 @@ import java.lang.ref.WeakReference
         Permission(
             alias = "receiveSms",
             strings = [Manifest.permission.RECEIVE_SMS]
+        ),
+        Permission(
+            alias = "phone",
+            strings = [
+                Manifest.permission.READ_PHONE_STATE,
+                Manifest.permission.READ_PHONE_NUMBERS
+            ]
         )
     ]
 )
@@ -306,6 +315,54 @@ class SmsVaultPlugin : Plugin() {
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to start SMS Retriever", e)
             call.reject("RETRIEVER_START_FAILED", "Failed to start SMS Retriever: ${e.message}", e)
+        }
+    }
+
+    // ─── F8 : Détection SIM / Numéro ───────────────────────────────────────
+
+    /**
+     * Récupère la liste des cartes SIM actives et de leurs numéros associés.
+     */
+    @PluginMethod
+    fun getSimInfo(call: PluginCall) {
+        if (getPermissionState("phone") != PermissionState.GRANTED) {
+            call.reject("PERMISSION_DENIED", "READ_PHONE_STATE / READ_PHONE_NUMBERS permissions are required to access SIM info")
+            return
+        }
+
+        try {
+            val subscriptionManager = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
+            val activeSubscriptions = subscriptionManager.activeSubscriptionInfoList
+
+            val simCardsArray = JSArray()
+            activeSubscriptions?.forEach { info ->
+                val simObj = JSObject().apply {
+                    put("carrierName", info.carrierName?.toString() ?: "")
+                    put("countryIso", info.countryIso ?: "")
+                    put("simSlotIndex", info.simSlotIndex)
+                    put("subscriptionId", info.subscriptionId)
+                    
+                    // Récupérer le numéro de téléphone (API 33+ : getPhoneNumber, API <33 : info.number)
+                    val number = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        subscriptionManager.getPhoneNumber(info.subscriptionId)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        info.number
+                    }
+                    put("phoneNumber", number ?: "")
+                }
+                simCardsArray.put(simObj)
+            }
+
+            val result = JSObject().apply {
+                put("simCards", simCardsArray)
+            }
+            call.resolve(result)
+        } catch (e: SecurityException) {
+            call.reject("PERMISSION_DENIED", "Access to telephony information was denied", e)
+        } catch (e: Exception) {
+            Logger.error(TAG, "getSimInfo failed", e)
+            call.reject("SIM_INFO_FAILED", "Failed to retrieve SIM card information: ${e.message}", e)
         }
     }
 }

@@ -18,6 +18,21 @@ export interface PermissionStatus {
   readSms: PermissionState;
   /** État de la permission RECEIVE_SMS */
   receiveSms: PermissionState;
+  /** État de la permission de lecture d'état de téléphone (SIM / numéro) */
+  phone: PermissionState;
+}
+
+export interface SimCardInfo {
+  /** Nom de l'opérateur (ex: Orange, SFR) */
+  carrierName: string;
+  /** Code pays ISO à 2 lettres (ex: fr) */
+  countryIso: string;
+  /** Numéro de téléphone de la ligne si provisionné (peut être vide) */
+  phoneNumber: string;
+  /** Index du slot SIM physique (0, 1, etc.) */
+  simSlotIndex: number;
+  /** Identifiant d'abonnement interne Android */
+  subscriptionId: number;
 }
 
 export interface GetSmsListOptions {
@@ -107,6 +122,12 @@ export interface SmsVaultPlugin {
     eventName: 'otpReceived',
     listener: (data: { message: string }) => void,
   ): Promise<PluginListenerHandle>;
+
+  /**
+   * Récupère la liste des cartes SIM actives et de leurs numéros de téléphone associés.
+   * Requiert la permission 'phone' (READ_PHONE_STATE et READ_PHONE_NUMBERS).
+   */
+  getSimInfo(): Promise<{ simCards: SimCardInfo[] }>;
 
   /**
    * Supprime tous les listeners enregistrés sur ce plugin.
