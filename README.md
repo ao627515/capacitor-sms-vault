@@ -138,6 +138,42 @@ await handle.remove();
 // ou : await SmsVault.removeAllListeners();
 ```
 
+### Détecter les OTP (SMS Retriever API)
+
+L'API SMS Retriever de Google Play Services permet de récupérer le contenu d'un SMS de validation de manière totalement transparente, **sans requérir de permissions SMS** (`READ_SMS` / `RECEIVE_SMS`).
+
+#### Prérequis de format du SMS
+
+Pour que le message soit intercepté par le système, le serveur d'envoi doit formater le message selon ces règles strictes :
+1. Le message ne doit pas dépasser **140 octets**.
+2. Commencer par le préfixe `<#>` (recommandé).
+3. Se terminer par l'**App Hash** unique de 11 caractères propre à votre signature d'application (ex: `FA+9qCX9VSu`).
+
+Exemple de SMS :
+```text
+<#> Votre code de validation est : 123456
+FA+9qCX9VSu
+```
+
+#### Exemple de code
+
+```typescript
+// 1. Enregistrer le listener pour l'OTP
+const handle = await SmsVault.addListener('otpReceived', (data) => {
+  console.log('SMS OTP reçu :', data.message);
+  
+  // Extraire le code (ex: regex)
+  const otpCode = data.message.match(/\d{6}/)?.[0];
+  console.log('Code OTP extrait :', otpCode);
+
+  // Libérer le listener (l'API SMS Retriever est à usage unique)
+  handle.remove();
+});
+
+// 2. Lancer l'écouteur (valide pour un seul message, max 5 minutes)
+await SmsVault.startSmsRetriever();
+```
+
 ## Conformité Google Play
 
 > ⚠️ **Important** : Les permissions `READ_SMS` et `RECEIVE_SMS` font partie des permissions sensibles soumises à une procédure de validation par Google.

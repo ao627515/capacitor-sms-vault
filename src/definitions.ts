@@ -91,6 +91,24 @@ export interface SmsVaultPlugin {
   ): Promise<PluginListenerHandle>;
 
   /**
+   * Démarre la détection d'OTP via la SMS Retriever API (V2).
+   * L'API attend la réception d'un unique message de format spécifique avec la clé de hachage de l'application.
+   * Ne requiert aucune permission SMS sensible.
+   */
+  startSmsRetriever(): Promise<void>;
+
+  /**
+   * Enregistre un listener pour la réception de l'OTP.
+   *
+   * @param eventName - 'otpReceived'
+   * @param listener - Callback appelé lorsque l'OTP/message est détecté
+   */
+  addListener(
+    eventName: 'otpReceived',
+    listener: (data: { message: string }) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
    * Supprime tous les listeners enregistrés sur ce plugin.
    */
   removeAllListeners(): Promise<void>;

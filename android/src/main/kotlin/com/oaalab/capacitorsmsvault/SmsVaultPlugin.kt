@@ -59,6 +59,7 @@ class SmsVaultPlugin : Plugin() {
     private val smsReceiver = SmsReceiver()
     private var isListening = false
     private lateinit var smsReader: SmsReader
+    private var smsRetrieverHelper: SmsRetrieverHelper? = null
 
     // ─── Lifecycle ───────────────────────────────────────────────────────────
 
@@ -87,6 +88,7 @@ class SmsVaultPlugin : Plugin() {
                 Logger.warn(TAG, "handleOnDestroy: receiver was not registered")
             }
         }
+        smsRetrieverHelper?.stop()
         super.handleOnDestroy()
     }
 
@@ -280,5 +282,30 @@ class SmsVaultPlugin : Plugin() {
             isListening = false
         }
         call.resolve()
+    }
+
+    // ─── F5 : SMS Retriever (OTP) ──────────────────────────────────────────
+
+    /**
+     * Démarre la détection d'OTP via la SMS Retriever API.
+     */
+    @PluginMethod
+    fun startSmsRetriever(call: PluginCall) {
+        try {
+            smsRetrieverHelper?.stop()
+
+            val helper = SmsRetrieverHelper(context) { message ->
+                val data = JSObject().apply {
+                    put("message", message)
+                }
+                notifyListeners("otpReceived", data)
+            }
+            smsRetrieverHelper = helper
+            helper.start()
+            call.resolve()
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to start SMS Retriever", e)
+            call.reject("RETRIEVER_START_FAILED", "Failed to start SMS Retriever: ${e.message}", e)
+        }
     }
 }

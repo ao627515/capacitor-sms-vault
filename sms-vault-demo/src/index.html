@@ -703,6 +703,53 @@
 
       </section>
 
+      <!-- ══ TAB : OTP RETRIEVER ══════════════════════════════════════════ -->
+      <section id="tab-otp" class="tab-panel">
+
+        <div class="card">
+          <div class="card-header">🔑 SMS Retriever API</div>
+          <div class="card-body">
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+              Cette API capte un SMS d'authentification (OTP) contenant le code de sécurité et la clé de hachage de l'app <strong>sans aucune permission SMS</strong>.
+            </p>
+
+            <div class="live-indicator" id="otpIndicator">
+              <div class="live-dot" id="otpDot"></div>
+              <span class="live-status" id="otpStatus">Inactif (Attente de démarrage)</span>
+            </div>
+
+            <button class="btn btn-primary" id="btnStartOtp">
+              ▶ startSmsRetriever()
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">📥 Message OTP Intercepté</div>
+          <div class="card-body">
+            <div id="otpResult">
+              <div class="empty-state">
+                <div class="empty-icon">📥</div>
+                Démarrez l'écouteur puis envoyez le SMS
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="border-color: var(--blue);">
+          <div class="card-header" style="color: var(--blue); border-bottom-color: var(--border);">
+            ℹ️ Guide de test du SMS OTP
+          </div>
+          <div class="card-body" style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45;">
+            <p style="margin-bottom: 8px;">Pour tester l'interception, envoyez un SMS formaté ainsi à cet appareil :</p>
+            <pre style="background: var(--surface2); border: 1px solid var(--border); padding: 8px; border-radius: var(--radius-sm); font-family: var(--font-mono); color: #fff; margin-bottom: 8px; font-size: 0.75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all;">&lt;#&gt; Votre code de validation est 987654.
+Clé de test : [VOTRE_HASH]</pre>
+            <p>Le hash dépend de la signature de l'APK installée. Pour l'obtenir lors des tests locaux, vous pouvez regarder les logs logcat.</p>
+          </div>
+        </div>
+
+      </section>
+
       <!-- ══ TAB 4 : LOGS ═════════════════════════════════════════════════ -->
       <section id="tab-logs" class="tab-panel">
 
@@ -734,6 +781,10 @@
       <button class="tab-btn" data-tab="live">
         <span class="tab-icon">📡</span>
         <span>Live</span>
+      </button>
+      <button class="tab-btn" data-tab="otp">
+        <span class="tab-icon">🔑</span>
+        <span>OTP</span>
       </button>
       <button class="tab-btn" data-tab="logs">
         <span class="tab-icon">📋</span>

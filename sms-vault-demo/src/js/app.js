@@ -434,6 +434,81 @@ document.getElementById('btnCopyLogs').addEventListener('click', () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
+// TAB — OTP RETRIEVER
+// ══════════════════════════════════════════════════════════════════════════════
+
+let otpListener = null;
+let isOtpListening = false;
+
+const btnStartOtp = document.getElementById('btnStartOtp');
+const otpDot = document.getElementById('otpDot');
+const otpStatus = document.getElementById('otpStatus');
+const otpResult = document.getElementById('otpResult');
+
+function updateOtpUI(listening, message = null) {
+  isOtpListening = listening;
+  if (listening) {
+    otpDot.classList.add('active');
+    otpStatus.textContent = 'Écoute active (attente SMS)…';
+    otpStatus.style.color = 'var(--green)';
+    btnStartOtp.disabled = true;
+    btnStartOtp.innerHTML = '<span class="spinner"></span> Écoute en cours…';
+  } else {
+    otpDot.classList.remove('active');
+    otpStatus.textContent = 'Inactif (Attente de démarrage)';
+    otpStatus.style.color = '';
+    btnStartOtp.disabled = false;
+    btnStartOtp.innerHTML = '▶ startSmsRetriever()';
+  }
+
+  if (message) {
+    otpResult.innerHTML = `
+      <div class="sms-card" style="border-color: var(--green);">
+        <div class="sms-card-head">
+          <span class="sms-address" style="color: var(--green);">🔑 OTP Détecté</span>
+          <span class="sms-type-badge inbox">OTP</span>
+        </div>
+        <div class="sms-body" style="color: #fff; font-weight: bold; font-size: 1.05rem;">${escapeHtml(message)}</div>
+        <div class="sms-date">Reçu à : ${timestamp()}</div>
+      </div>
+    `;
+  }
+}
+
+btnStartOtp.addEventListener('click', async () => {
+  try {
+    updateOtpUI(true);
+    
+    // Supprimer l'écouteur précédent s'il existe
+    if (otpListener) {
+      await otpListener.remove();
+      otpListener = null;
+    }
+
+    // S'abonner à l'événement otpReceived
+    otpListener = await SmsVault.addListener('otpReceived', (data) => {
+      addLog('🔑', 'event:otpReceived', {}, data.message, 'event');
+      updateOtpUI(false, data.message);
+      toast('OTP reçu avec succès !', 'success');
+      
+      if (otpListener) {
+        otpListener.remove();
+        otpListener = null;
+      }
+    });
+
+    // Démarrer l'écouteur natif
+    await SmsVault.startSmsRetriever();
+    addLog('▶', 'startSmsRetriever', {}, 'OK');
+    toast('Écouteur SMS Retriever démarré (valide 5 min)', 'success');
+  } catch (e) {
+    updateOtpUI(false);
+    addLog('▶', 'startSmsRetriever', {}, e.message, 'err');
+    toast(e.message, 'error');
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
 // INIT — vérifier les permissions au démarrage
 // ══════════════════════════════════════════════════════════════════════════════
 
