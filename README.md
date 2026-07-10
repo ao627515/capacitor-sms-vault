@@ -111,19 +111,41 @@ if (!isDefault) {
 ### Lire l'historique SMS
 
 ```typescript
-// 20 derniers SMS
-const { messages } = await SmsVault.getSmsList({ limit: 20 });
+import { MessageType } from 'capacitor-sms-vault';
 
-// SMS des 7 derniers jours d'un expéditeur
+// 20 derniers SMS de la boîte de réception (INBOX par défaut)
+const { messages } = await SmsVault.getSmsList({
+  filter: { maxCount: 20 }
+});
+
+// SMS des 7 derniers jours d'un expéditeur avec projection de fil
 const { messages: recent } = await SmsVault.getSmsList({
-  address: '+33612345678',
-  since: Date.now() - 7 * 24 * 60 * 60 * 1000,
-  limit: 50,
+  filter: {
+    address: '+33612345678',
+    minDate: Date.now() - 7 * 24 * 60 * 60 * 1000,
+    maxCount: 50,
+    type: MessageType.ALL // Toutes les boîtes
+  },
+  projection: {
+    threadId: true
+  }
 });
 
 messages.forEach(sms => {
-  console.log(`[${new Date(sms.date).toISOString()}] ${sms.address}: ${sms.body}`);
+  console.log(`[${new Date(sms.date).toISOString()}] [Thread: ${sms.threadId}] ${sms.address}: ${sms.body}`);
 });
+
+// Récupérer le nombre de messages correspondants sans les charger
+const { count } = await SmsVault.getCount({
+  filter: { address: '+33612345678' }
+});
+console.log(`Nombre de SMS reçus de l'expéditeur: ${count}`);
+
+// Obtenir toutes les colonnes brutes pour le débogage
+const { messages: rawMessages } = await SmsVault.getRawSmsList({
+  filter: { maxCount: 5 }
+});
+console.log('SMS brut pour débogage :', rawMessages);
 ```
 
 ### Intercepter les SMS en temps réel
@@ -227,17 +249,20 @@ if (status.phone === 'granted') {
 * [`isDefaultSmsApp()`](#isdefaultsmsapp)
 * [`requestDefaultSmsApp()`](#requestdefaultsmsapp)
 * [`getSmsList(...)`](#getsmslist)
+* [`getCount(...)`](#getcount)
+* [`getRawSmsList(...)`](#getrawsmslist)
 * [`startListening()`](#startlistening)
 * [`stopListening()`](#stoplistening)
+* [`startSmsRetriever()`](#startsmsretriever)
+* [`getSimInfo()`](#getsiminfo)
 * [`addListener('smsReceived', ...)`](#addlistenersmsreceived-)
+* [`addListener('otpReceived', ...)`](#addlistenerotpreceived-)
 * [`removeAllListeners()`](#removealllisteners)
 * [Interfaces](#interfaces)
-* [Type Aliases](#type-aliases)
 
 </docgen-index>
 
 <docgen-api>
-<!--Update the source file JSDoc comments and rerun docgen to update the docs below-->
 
 ### checkPermissions()
 
@@ -245,7 +270,7 @@ if (status.phone === 'granted') {
 checkPermissions() => Promise<PermissionStatus>
 ```
 
-Vérifie l'état actuel des permissions READ_SMS et RECEIVE_SMS.
+Vérifie l'état actuel des permissions READ_SMS, RECEIVE_SMS et de l'état du téléphone.
 Ne déclenche aucune demande.
 
 **Returns:** <code>Promise&lt;<a href="#permissionstatus">PermissionStatus</a>&gt;</code>
@@ -259,7 +284,7 @@ Ne déclenche aucune demande.
 requestPermissions() => Promise<PermissionStatus>
 ```
 
-Demande les permissions READ_SMS et RECEIVE_SMS à l'utilisateur.
+Demande les permissions de lecture, réception de SMS et de l'état du téléphone à l'utilisateur.
 Retourne l'état des permissions après la décision de l'utilisateur.
 
 **Returns:** <code>Promise&lt;<a href="#permissionstatus">PermissionStatus</a>&gt;</code>
@@ -274,7 +299,7 @@ isDefaultSmsApp() => Promise<{ isDefault: boolean; }>
 ```
 
 Vérifie si l'application est l'application SMS par défaut du système.
-Sur Android 10+, seule l'app par défaut peut lire l'historique SMS.
+Sur Android 10+, seule l'app par défaut peut lire l'historique SMS complet.
 
 **Returns:** <code>Promise&lt;{ isDefault: boolean; }&gt;</code>
 
@@ -287,8 +312,7 @@ Sur Android 10+, seule l'app par défaut peut lire l'historique SMS.
 requestDefaultSmsApp() => Promise<{ isDefault: boolean; }>
 ```
 
-Ouvre le dialogue système pour demander à l'utilisateur de définir
-cette application comme application SMS par défaut.
+Ouvre le dialogue système pour demander à l'utilisateur de définir cette application comme application SMS par défaut.
 
 **Returns:** <code>Promise&lt;{ isDefault: boolean; }&gt;</code>
 
@@ -298,17 +322,38 @@ cette application comme application SMS par défaut.
 ### getSmsList(...)
 
 ```typescript
-getSmsList(options?: GetSmsListOptions | undefined) => Promise<{ messages: SmsMessage[]; }>
+getSmsList(options?: { filter?: SmsFilter; projection?: SmsProjection; } | undefined) => Promise<{ messages: SmsMessage[]; }>
 ```
 
-Récupère la liste des SMS de l'inbox avec filtres optionnels.
-Requiert la permission READ_SMS et que l'app soit l'app SMS par défaut (Android 10+).
-
-| Param         | Type                                                            | Description          |
-| ------------- | --------------------------------------------------------------- | -------------------- |
-| **`options`** | <code><a href="#getsmslistoptions">GetSmsListOptions</a></code> | - Filtres optionnels |
+Récupère la liste des SMS selon les filtres et la projection fournis. Le filtrage est appliqué côté natif pour des raisons de performance.
 
 **Returns:** <code>Promise&lt;{ messages: SmsMessage[]; }&gt;</code>
+
+--------------------
+
+
+### getCount(...)
+
+```typescript
+getCount(options?: { filter?: SmsFilter; } | undefined) => Promise<{ count: number; }>
+```
+
+Retourne uniquement le nombre de SMS correspondant aux filtres, sans charger les messages.
+
+**Returns:** <code>Promise&lt;{ count: number; }&gt;</code>
+
+--------------------
+
+
+### getRawSmsList(...)
+
+```typescript
+getRawSmsList(options?: { filter?: SmsFilter; } | undefined) => Promise<{ messages: Record<string, string>[]; }>
+```
+
+Retourne toutes les colonnes brutes de la table SMS Android, sans mapping, pour le débogage.
+
+**Returns:** <code>Promise&lt;{ messages: Record&lt;string, string&gt;[]; }&gt;</code>
 
 --------------------
 
@@ -319,9 +364,8 @@ Requiert la permission READ_SMS et que l'app soit l'app SMS par défaut (Android
 startListening() => Promise<void>
 ```
 
-Démarre l'écoute des SMS entrants en temps réel.
+Démarre l'écoute des SMS entrants via un BroadcastReceiver dynamique.
 Requiert la permission RECEIVE_SMS.
-Émettra l'événement 'smsReceived' à chaque nouveau SMS reçu.
 
 --------------------
 
@@ -333,7 +377,31 @@ stopListening() => Promise<void>
 ```
 
 Arrête l'écoute des SMS entrants.
-Libère le BroadcastReceiver Android.
+
+--------------------
+
+
+### startSmsRetriever()
+
+```typescript
+startSmsRetriever() => Promise<void>
+```
+
+Démarre la détection d'OTP via la SMS Retriever API.
+
+--------------------
+
+
+### getSimInfo()
+
+```typescript
+getSimInfo() => Promise<{ simCards: SimCardInfo[]; }>
+```
+
+Récupère la liste des cartes SIM actives et de leurs numéros de téléphone associés.
+Requiert la permission 'phone'.
+
+**Returns:** <code>Promise&lt;{ simCards: SimCardInfo[]; }&gt;</code>
 
 --------------------
 
@@ -345,14 +413,17 @@ addListener(eventName: 'smsReceived', listener: (sms: SmsMessage) => void) => Pr
 ```
 
 Enregistre un listener pour les SMS reçus en temps réel.
-Appeler startListening() pour activer la réception.
 
-| Param           | Type                                                                | Description                            |
-| --------------- | ------------------------------------------------------------------- | -------------------------------------- |
-| **`eventName`** | <code>'smsReceived'</code>                                          | - 'smsReceived'                        |
-| **`listener`**  | <code>(sms: <a href="#smsmessage">SmsMessage</a>) =&gt; void</code> | - Callback appelé à chaque SMS entrant |
+--------------------
 
-**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+### addListener('otpReceived', ...)
+
+```typescript
+addListener(eventName: 'otpReceived', listener: (data: { message: string; }) => void) => Promise<PluginListenerHandle>
+```
+
+Enregistre un listener pour la réception de l'OTP.
 
 --------------------
 
@@ -373,44 +444,65 @@ Supprime tous les listeners enregistrés sur ce plugin.
 
 #### PermissionStatus
 
-| Prop             | Type                                                        | Description                       |
-| ---------------- | ----------------------------------------------------------- | --------------------------------- |
-| **`readSms`**    | <code><a href="#permissionstate">PermissionState</a></code> | État de la permission READ_SMS    |
-| **`receiveSms`** | <code><a href="#permissionstate">PermissionState</a></code> | État de la permission RECEIVE_SMS |
+| Prop             | Type                                                     | Description                       |
+| ---------------- | -------------------------------------------------------- | --------------------------------- |
+| **`readSms`**    | <code>'prompt' \| 'prompt-with-rationale' \| 'granted' \| 'denied'</code> | État de la permission READ_SMS    |
+| **`receiveSms`** | <code>'prompt' \| 'prompt-with-rationale' \| 'granted' \| 'denied'</code> | État de la permission RECEIVE_SMS |
+| **`phone`**      | <code>'prompt' \| 'prompt-with-rationale' \| 'granted' \| 'denied'</code> | État de la permission de téléphone |
+
+
+#### SimCardInfo
+
+| Prop                 | Type                 | Description                                                 |
+| -------------------- | -------------------- | ----------------------------------------------------------- |
+| **`carrierName`**    | <code>string</code>  | Nom de l'opérateur (ex: Orange, SFR)                        |
+| **`countryIso`**     | <code>string</code>  | Code pays ISO à 2 lettres (ex: fr)                          |
+| **`phoneNumber`**    | <code>string</code>  | Numéro de téléphone (si disponible)                         |
+| **`simSlotIndex`**   | <code>number</code>  | Index du slot SIM (0, 1)                                    |
+| **`subscriptionId`** | <code>number</code>  | Identifiant d'abonnement interne                            |
+
+
+#### SmsFilter
+
+| Prop               | Type                 | Description                                                 |
+| ------------------ | -------------------- | ----------------------------------------------------------- |
+| **`type`**         | <code>number</code>  | Type de boîte (défaut : INBOX = 1, ALL = 0)                 |
+| **`id`**           | <code>string</code>  | Identifiant exact du message                                |
+| **`threadId`**     | <code>string</code>  | Identifiant du fil de conversation                          |
+| **`address`**      | <code>string</code>  | Filtrer par expéditeur (correspondance partielle)           |
+| **`addressRegex`** | <code>string</code>  | Filtrer par expéditeur (expression régulière)               |
+| **`body`**         | <code>string</code>  | Filtrer par contenu du corps (correspondance partielle)      |
+| **`bodyRegex`**    | <code>string</code>  | Filtrer par contenu du corps (expression régulière)         |
+| **`minDate`**      | <code>number</code>  | Timestamp ms minimum                                        |
+| **`maxDate`**      | <code>number</code>  | Timestamp ms maximum                                        |
+| **`indexFrom`**    | <code>number</code>  | Index de départ pour la pagination                          |
+| **`maxCount`**     | <code>number</code>  | Nombre maximum de résultats                                 |
+
+
+#### SmsProjection
+
+| Prop           | Type                 | Description                                                 |
+| -------------- | -------------------- | ----------------------------------------------------------- |
+| **`threadId`** | <code>boolean</code> | Inclure l'identifiant du fil de conversation                |
+| **`subject`**  | <code>boolean</code> | Inclure le sujet du message                                 |
+| **`dateSent`** | <code>boolean</code> | Inclure le timestamp d'envoi opérateur                      |
+| **`creator`**  | <code>boolean</code> | Inclure l'application créatrice                             |
+| **`person`**   | <code>boolean</code> | Inclure l'identifiant du contact                            |
 
 
 #### SmsMessage
 
-| Prop          | Type                           | Description                                                |
-| ------------- | ------------------------------ | ---------------------------------------------------------- |
-| **`id`**      | <code>string</code>            | Identifiant unique du SMS (depuis la base ContentProvider) |
-| **`address`** | <code>string</code>            | Numéro ou nom de l'expéditeur                              |
-| **`body`**    | <code>string</code>            | Contenu brut du SMS                                        |
-| **`date`**    | <code>number</code>            | Timestamp en millisecondes                                 |
-| **`type`**    | <code>'inbox' \| 'sent'</code> | Type de message : reçu ou envoyé                           |
-
-
-#### GetSmsListOptions
-
-| Prop          | Type                | Description                                                         |
-| ------------- | ------------------- | ------------------------------------------------------------------- |
-| **`address`** | <code>string</code> | Filtrer par numéro d'expéditeur (recherche partielle)               |
-| **`since`**   | <code>number</code> | Timestamp ms minimum — retourne uniquement les SMS après cette date |
-| **`limit`**   | <code>number</code> | Nombre maximum de résultats (défaut : 100)                          |
-
-
-#### PluginListenerHandle
-
-| Prop         | Type                                      |
-| ------------ | ----------------------------------------- |
-| **`remove`** | <code>() =&gt; Promise&lt;void&gt;</code> |
-
-
-### Type Aliases
-
-
-#### PermissionState
-
-<code>'prompt' | 'prompt-with-rationale' | 'granted' | 'denied'</code>
+| Prop          | Type                 | Description                                                 |
+| ------------- | -------------------- | ----------------------------------------------------------- |
+| **`id`**      | <code>string</code>  | Identifiant unique du SMS                                   |
+| **`threadId`**| <code>string</code>  | Identifiant du fil de conversation                          |
+| **`address`** | <code>string</code>  | Numéro ou nom de l'expéditeur                               |
+| **`body`**    | <code>string</code>  | Contenu brut du SMS                                         |
+| **`subject`** | <code>string</code>  | Sujet du message                                            |
+| **`date`**    | <code>number</code>  | Timestamp local en ms                                       |
+| **`dateSent`**| <code>number</code>  | Timestamp réseau en ms                                      |
+| **`type`**    | <code>number</code>  | Type de message (MessageType)                               |
+| **`creator`** | <code>string</code>  | Package créateur                                            |
+| **`person`**  | <code>string</code>  | Identifiant contact                                         |
 
 </docgen-api>

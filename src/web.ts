@@ -1,10 +1,11 @@
 import { WebPlugin } from '@capacitor/core';
 
 import type {
-  GetSmsListOptions,
   PermissionStatus,
   SimCardInfo,
+  SmsFilter,
   SmsMessage,
+  SmsProjection,
   SmsVaultPlugin,
 } from './definitions';
 
@@ -30,7 +31,15 @@ export class SmsVaultWeb extends WebPlugin implements SmsVaultPlugin {
     throw this.unavailable('SmsVault is not available on web.');
   }
 
-  async getSmsList(_options?: GetSmsListOptions): Promise<{ messages: SmsMessage[] }> {
+  async getSmsList(_options?: { filter?: SmsFilter; projection?: SmsProjection }): Promise<{ messages: SmsMessage[] }> {
+    throw this.unavailable('SmsVault is not available on web.');
+  }
+
+  async getCount(_options?: { filter?: SmsFilter }): Promise<{ count: number }> {
+    throw this.unavailable('SmsVault is not available on web.');
+  }
+
+  async getRawSmsList(_options?: { filter?: SmsFilter }): Promise<{ messages: Record<string, string>[] }> {
     throw this.unavailable('SmsVault is not available on web.');
   }
 

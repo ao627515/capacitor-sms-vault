@@ -1,16 +1,55 @@
 import type { PermissionState, PluginListenerHandle } from '@capacitor/core';
 
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+/**
+ * Types de boîte SMS Android — correspond aux valeurs
+ * de la colonne `type` dans Telephony.Sms.
+ */
+export enum MessageType {
+  /** Tous les messages toutes boîtes confondues */
+  ALL = 0,
+  /** Messages reçus */
+  INBOX = 1,
+  /** Messages envoyés */
+  SENT = 2,
+  /** Brouillons */
+  DRAFT = 3,
+  /** Messages en attente d'envoi */
+  OUTBOX = 4,
+  /** Messages dont l'envoi a échoué */
+  FAILED = 5,
+  /** Messages en file d'attente */
+  QUEUED = 6,
+}
+
+// ─────────────────────────────────────────────
+// Interfaces de données
+// ─────────────────────────────────────────────
+
 export interface SmsMessage {
   /** Identifiant unique du SMS (depuis la base ContentProvider) */
   id: string;
+  /** Identifiant du fil de conversation */
+  threadId?: string;
   /** Numéro ou nom de l'expéditeur */
   address: string;
   /** Contenu brut du SMS */
   body: string;
-  /** Timestamp en millisecondes */
+  /** Sujet du message (MMS ou opérateurs spécifiques) */
+  subject?: string;
+  /** Timestamp local en millisecondes (date de réception/envoi sur l'appareil) */
   date: number;
-  /** Type de message : reçu ou envoyé */
-  type: 'inbox' | 'sent';
+  /** Timestamp réseau en millisecondes (date d'envoi côté opérateur) */
+  dateSent?: number;
+  /** Type de message selon MessageType */
+  type: MessageType;
+  /** Package de l'application ayant créé le SMS */
+  creator?: string;
+  /** Identifiant du contact associé à l'expéditeur */
+  person?: string;
 }
 
 export interface PermissionStatus {
@@ -35,75 +74,152 @@ export interface SimCardInfo {
   subscriptionId: number;
 }
 
-export interface GetSmsListOptions {
-  /** Filtrer par numéro d'expéditeur (recherche partielle) */
-  address?: string;
-  /** Timestamp ms minimum — retourne uniquement les SMS après cette date */
-  since?: number;
-  /** Nombre maximum de résultats (défaut : 100) */
-  limit?: number;
+// ─────────────────────────────────────────────
+// Filtres et projection
+// ─────────────────────────────────────────────
+
+/**
+ * Sélection des colonnes à retourner dans SmsMessage.
+ * Omettre une colonne réduit la quantité de données
+ * transférée entre la couche native et le JS.
+ * Par défaut toutes les colonnes obligatoires sont retournées.
+ */
+export interface SmsProjection {
+  threadId?: boolean;
+  subject?: boolean;
+  dateSent?: boolean;
+  creator?: boolean;
+  person?: boolean;
 }
 
+/**
+ * Filtres appliqués côté natif (Kotlin/ContentResolver)
+ * avant le retour des données au JS — plus performant
+ * qu'un filtrage JS sur un inbox complet.
+ */
+export interface SmsFilter {
+  /** Type de boîte à interroger (défaut : INBOX) */
+  type?: MessageType;
+  /** Identifiant exact du SMS */
+  id?: string;
+  /** Identifiant exact du fil de conversation */
+  threadId?: string;
+  /** Filtrer par expéditeur (correspondance partielle) */
+  address?: string;
+  /** Filtrer par expéditeur via expression régulière */
+  addressRegex?: string;
+  /** Filtrer par contenu du corps (correspondance partielle) */
+  body?: string;
+  /** Filtrer par contenu du corps via expression régulière */
+  bodyRegex?: string;
+  /** Timestamp ms minimum — retourne les SMS après cette date */
+  minDate?: number;
+  /** Timestamp ms maximum — retourne les SMS avant cette date */
+  maxDate?: number;
+  /** Index de départ pour la pagination (défaut : 0) */
+  indexFrom?: number;
+  /** Nombre maximum de résultats (défaut : 100) */
+  maxCount?: number;
+}
+
+// ─────────────────────────────────────────────
+// Interface principale du plugin
+// ─────────────────────────────────────────────
+
 export interface SmsVaultPlugin {
+
+  // ── Permissions ──────────────────────────────
+
   /**
-   * Vérifie l'état actuel des permissions READ_SMS et RECEIVE_SMS.
+   * Vérifie l'état actuel des permissions READ_SMS, RECEIVE_SMS et de l'état du téléphone.
    * Ne déclenche aucune demande.
    */
   checkPermissions(): Promise<PermissionStatus>;
 
   /**
-   * Demande les permissions READ_SMS et RECEIVE_SMS à l'utilisateur.
+   * Demande les permissions de lecture, réception de SMS et de l'état du téléphone à l'utilisateur.
    * Retourne l'état des permissions après la décision de l'utilisateur.
    */
   requestPermissions(): Promise<PermissionStatus>;
 
+  // ── Default SMS handler ───────────────────────
+
   /**
    * Vérifie si l'application est l'application SMS par défaut du système.
-   * Sur Android 10+, seule l'app par défaut peut lire l'historique SMS.
+   * Sur Android 10+, seule l'app par défaut peut lire l'historique SMS complet.
    */
   isDefaultSmsApp(): Promise<{ isDefault: boolean }>;
 
   /**
    * Ouvre le dialogue système pour demander à l'utilisateur de définir
    * cette application comme application SMS par défaut.
+   * Retourne le statut après la décision de l'utilisateur.
    */
   requestDefaultSmsApp(): Promise<{ isDefault: boolean }>;
 
-  /**
-   * Récupère la liste des SMS de l'inbox avec filtres optionnels.
-   * Requiert la permission READ_SMS et que l'app soit l'app SMS par défaut (Android 10+).
-   *
-   * @param options - Filtres optionnels
-   * @param options.address - Filtrer par expéditeur (recherche partielle)
-   * @param options.since - Timestamp ms minimum
-   * @param options.limit - Nombre maximum de résultats (défaut : 100)
-   */
-  getSmsList(options?: GetSmsListOptions): Promise<{ messages: SmsMessage[] }>;
+  // ── Lecture historique ────────────────────────
 
   /**
-   * Démarre l'écoute des SMS entrants en temps réel.
+   * Récupère la liste des SMS selon les filtres et la projection fournis.
+   * Le filtrage est appliqué côté natif pour des raisons de performance.
+   *
+   * @param options.filter  - Critères de filtrage (expéditeur, date, regex, type...)
+   * @param options.projection - Colonnes supplémentaires à inclure dans la réponse
+   */
+  getSmsList(options?: {
+    filter?: SmsFilter;
+    projection?: SmsProjection;
+  }): Promise<{ messages: SmsMessage[] }>;
+
+  /**
+   * Retourne uniquement le nombre de SMS correspondant aux filtres,
+   * sans charger les messages — utile pour la pagination ou les badges.
+   *
+   * @param options.filter - Mêmes critères que getSmsList
+   */
+  getCount(options?: {
+    filter?: SmsFilter;
+  }): Promise<{ count: number }>;
+
+  /**
+   * Retourne toutes les colonnes brutes de la table SMS Android,
+   * sans mapping — utile pour le debug ou l'accès à des colonnes
+   * non exposées par l'API standard (sub_id, service_center, etc.).
+   *
+   * ⚠️ Performance : ne pas utiliser sur de grands volumes.
+   * Préférer getSmsList() avec projection pour un usage en production.
+   *
+   * @param options.filter - Mêmes critères que getSmsList
+   */
+  getRawSmsList(options?: {
+    filter?: SmsFilter;
+  }): Promise<{ messages: Record<string, string>[] }>;
+
+  // ── Interception temps réel ───────────────────
+
+  /**
+   * Démarre l'écoute des SMS entrants via un BroadcastReceiver dynamique.
    * Requiert la permission RECEIVE_SMS.
-   * Émettra l'événement 'smsReceived' à chaque nouveau SMS reçu.
+   * Émet l'événement 'smsReceived' à chaque nouveau SMS reçu.
    */
   startListening(): Promise<void>;
 
   /**
    * Arrête l'écoute des SMS entrants.
-   * Libère le BroadcastReceiver Android.
+   * Libère le BroadcastReceiver Android enregistré par startListening().
    */
   stopListening(): Promise<void>;
 
   /**
    * Enregistre un listener pour les SMS reçus en temps réel.
    * Appeler startListening() pour activer la réception.
-   *
-   * @param eventName - 'smsReceived'
-   * @param listener - Callback appelé à chaque SMS entrant
    */
   addListener(
     eventName: 'smsReceived',
     listener: (sms: SmsMessage) => void,
   ): Promise<PluginListenerHandle>;
+
+  // ── OTP (SMS Retriever API) ───────────────────
 
   /**
    * Démarre la détection d'OTP via la SMS Retriever API.
@@ -123,11 +239,15 @@ export interface SmsVaultPlugin {
     listener: (data: { message: string }) => void,
   ): Promise<PluginListenerHandle>;
 
+  // ── Détection SIM / Numéro ────────────────────
+
   /**
    * Récupère la liste des cartes SIM actives et de leurs numéros de téléphone associés.
    * Requiert la permission 'phone' (READ_PHONE_STATE et READ_PHONE_NUMBERS).
    */
   getSimInfo(): Promise<{ simCards: SimCardInfo[] }>;
+
+  // ── Utilitaires ───────────────────────────────
 
   /**
    * Supprime tous les listeners enregistrés sur ce plugin.

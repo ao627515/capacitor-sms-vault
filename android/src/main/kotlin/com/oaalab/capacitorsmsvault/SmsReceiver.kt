@@ -55,7 +55,7 @@ class SmsReceiver : BroadcastReceiver() {
                     put("address", smsMessage.displayOriginatingAddress ?: "")
                     put("body", smsMessage.messageBody ?: "")
                     put("date", smsMessage.timestampMillis)
-                    put("type", "inbox")
+                    put("type", 1) // MessageType.INBOX = 1
                 }
                 plugin.notifySmsReceived(smsObj)
                 Logger.info(TAG, "SMS received from: ${smsMessage.displayOriginatingAddress}")

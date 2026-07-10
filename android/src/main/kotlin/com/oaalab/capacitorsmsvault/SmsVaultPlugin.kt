@@ -194,8 +194,7 @@ class SmsVaultPlugin : Plugin() {
     // ─── Lecture de l'historique SMS ─────────────────────────────────────────
 
     /**
-     * Récupère la liste des SMS avec filtres optionnels.
-     * Requiert READ_SMS. Sur Android 10+, l'app doit aussi être l'app SMS par défaut.
+     * Récupère la liste des SMS selon les filtres et la projection fournis.
      */
     @PluginMethod
     fun getSmsList(call: PluginCall) {
@@ -205,11 +204,10 @@ class SmsVaultPlugin : Plugin() {
         }
 
         try {
-            val address = call.getString("address")
-            val since: Long? = call.getLong("since")
-            val limit: Int? = call.getInt("limit")
+            val filter = call.getObject("filter")
+            val projection = call.getObject("projection")
 
-            val messages = smsReader.getSmsList(address, since, limit)
+            val messages = smsReader.getSmsList(filter, projection)
             call.resolve(JSObject().put("messages", messages))
         } catch (e: SecurityException) {
             call.reject(
@@ -220,6 +218,46 @@ class SmsVaultPlugin : Plugin() {
         } catch (e: Exception) {
             Logger.error(TAG, "getSmsList failed", e)
             call.reject("READ_FAILED", "Failed to read SMS list: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Retourne uniquement le nombre de SMS correspondant aux filtres.
+     */
+    @PluginMethod
+    fun getCount(call: PluginCall) {
+        if (getPermissionState("readSms") != PermissionState.GRANTED) {
+            call.reject("PERMISSION_DENIED", "READ_SMS permission is required to count SMS")
+            return
+        }
+
+        try {
+            val filter = call.getObject("filter")
+            val count = smsReader.getCount(filter)
+            call.resolve(JSObject().put("count", count))
+        } catch (e: Exception) {
+            Logger.error(TAG, "getCount failed", e)
+            call.reject("COUNT_FAILED", "Failed to count SMS: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Retourne toutes les colonnes brutes de la table SMS Android sous forme de chaîne.
+     */
+    @PluginMethod
+    fun getRawSmsList(call: PluginCall) {
+        if (getPermissionState("readSms") != PermissionState.GRANTED) {
+            call.reject("PERMISSION_DENIED", "READ_SMS permission is required to read raw SMS history")
+            return
+        }
+
+        try {
+            val filter = call.getObject("filter")
+            val messages = smsReader.getRawSmsList(filter)
+            call.resolve(JSObject().put("messages", messages))
+        } catch (e: Exception) {
+            Logger.error(TAG, "getRawSmsList failed", e)
+            call.reject("READ_RAW_FAILED", "Failed to read raw SMS: ${e.message}", e)
         }
     }
 

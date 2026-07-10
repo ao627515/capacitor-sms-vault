@@ -85,13 +85,26 @@ function formatShortTime(ts) {
   return new Date(ts).toLocaleTimeString('fr-FR', { hour12: false });
 }
 
+function mapTypeToString(type) {
+  switch (type) {
+    case 1: return 'inbox';
+    case 2: return 'sent';
+    case 3: return 'draft';
+    case 4: return 'outbox';
+    case 5: return 'failed';
+    case 6: return 'queued';
+    default: return 'all';
+  }
+}
+
 function renderSmsCard(sms, isNew = false) {
   const card = document.createElement('div');
   card.className = 'sms-card';
+  const typeStr = typeof sms.type === 'number' ? mapTypeToString(sms.type) : (sms.type || 'inbox');
   card.innerHTML = `
     <div class="sms-card-head">
       <span class="sms-address">${escapeHtml(sms.address || '(inconnu)')}</span>
-      <span class="sms-type-badge ${sms.type}">${sms.type}</span>
+      <span class="sms-type-badge ${typeStr}">${typeStr}</span>
       ${sms.id ? `<span class="sms-id">id:${escapeHtml(sms.id)}</span>` : ''}
     </div>
     <div class="sms-body">${escapeHtml(sms.body || '(vide)')}</div>
@@ -277,24 +290,30 @@ document.getElementById('btnGetSmsList').addEventListener('click', async () => {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Chargement…';
 
-  const options = {};
+  const filter = {};
   const address = document.getElementById('filterAddress').value.trim();
-  if (address) options.address = address;
+  if (address) filter.address = address;
 
   if (filterSinceToggle.checked) {
     const sinceVal = document.getElementById('filterSince').value;
-    if (sinceVal) options.since = new Date(sinceVal).getTime();
+    if (sinceVal) filter.minDate = new Date(sinceVal).getTime();
   }
 
-  options.limit = parseInt(filterLimit.value, 10);
+  filter.maxCount = parseInt(filterLimit.value, 10);
+
+  // Type de boîte
+  if (selectedType === 'all') {
+    filter.type = 0; // MessageType.ALL
+  } else if (selectedType === 'inbox') {
+    filter.type = 1; // MessageType.INBOX
+  } else if (selectedType === 'sent') {
+    filter.type = 2; // MessageType.SENT
+  }
+
+  const options = { filter };
 
   try {
     let { messages } = await SmsVault.getSmsList(options);
-
-    // Filtre type côté client (le plugin ne supporte pas encore ce filtre nativement)
-    if (selectedType !== 'all') {
-      messages = messages.filter(m => m.type === selectedType);
-    }
 
     addLog('🔍', 'getSmsList', options, `${messages.length} messages`);
     renderSmsResults(messages, options);
