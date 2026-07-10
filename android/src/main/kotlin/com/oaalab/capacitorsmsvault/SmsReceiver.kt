@@ -9,7 +9,7 @@ import com.getcapacitor.Logger
 import java.lang.ref.WeakReference
 
 /**
- * BroadcastReceiver pour l'interception des SMS entrants en temps réel (F4).
+ * BroadcastReceiver pour l'interception des SMS entrants en temps réel.
  *
  * Ce receiver est enregistré/désenregistré dynamiquement par SmsVaultPlugin
  * via startListening() / stopListening(). Il notifie le plugin Capacitor

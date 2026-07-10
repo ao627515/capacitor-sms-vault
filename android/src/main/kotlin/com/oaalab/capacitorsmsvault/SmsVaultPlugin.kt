@@ -23,16 +23,10 @@ import java.lang.ref.WeakReference
  * Plugin Capacitor principal pour capacitor-sms-vault.
  *
  * Ce fichier est le pont entre la couche JavaScript/TypeScript et le système Android.
- * Il ne contient aucune logique métier — toute la logique est dans :
- *   - SmsReader    : lecture de l'historique via ContentResolver
- *   - SmsReceiver  : interception des SMS entrants via BroadcastReceiver
- *
- * Fonctions implémentées (V1) :
- *   F1 - Gestion des permissions (READ_SMS, RECEIVE_SMS)
- *   F2 - Default SMS handler (vérification + demande)
- *   F3 - Lecture historique SMS
- *   F4 - Interception SMS temps réel
- *   F6 - Export JSON (inclus dans F3/F4 via JSObject)
+ * Il ne contient aucune logique métier — toute la logique est déléguée à :
+ *   - SmsReader            : lecture de l'historique via ContentResolver
+ *   - SmsReceiver          : interception des SMS entrants via BroadcastReceiver
+ *   - SmsRetrieverHelper   : interception des codes OTP via SMS Retriever API
  */
 @CapacitorPlugin(
     name = "SmsVault",
@@ -101,7 +95,7 @@ class SmsVaultPlugin : Plugin() {
         super.handleOnDestroy()
     }
 
-    // ─── F1 : Gestion des permissions ────────────────────────────────────────
+    // ─── Gestion des permissions ─────────────────────────────────────────────
 
     /**
      * Vérifie l'état des permissions READ_SMS et RECEIVE_SMS sans les demander.
@@ -145,7 +139,7 @@ class SmsVaultPlugin : Plugin() {
         }
     }
 
-    // ─── F2 : Default SMS App ────────────────────────────────────────────────
+    // ─── Application SMS par défaut ──────────────────────────────────────────
 
     /**
      * Vérifie si l'app est l'application SMS par défaut du système.
@@ -197,7 +191,7 @@ class SmsVaultPlugin : Plugin() {
         resolveCall.resolve(JSObject().put("isDefault", isDefault))
     }
 
-    // ─── F3 : Lecture historique SMS ─────────────────────────────────────────
+    // ─── Lecture de l'historique SMS ─────────────────────────────────────────
 
     /**
      * Récupère la liste des SMS avec filtres optionnels.
@@ -229,7 +223,7 @@ class SmsVaultPlugin : Plugin() {
         }
     }
 
-    // ─── F4 : Interception SMS temps réel ────────────────────────────────────
+    // ─── Interception des SMS en temps réel ──────────────────────────────────
 
     /**
      * Démarre l'écoute des SMS entrants via BroadcastReceiver.
@@ -293,7 +287,7 @@ class SmsVaultPlugin : Plugin() {
         call.resolve()
     }
 
-    // ─── F5 : SMS Retriever (OTP) ──────────────────────────────────────────
+    // ─── SMS Retriever (OTP) ─────────────────────────────────────────────────
 
     /**
      * Démarre la détection d'OTP via la SMS Retriever API.
@@ -318,7 +312,7 @@ class SmsVaultPlugin : Plugin() {
         }
     }
 
-    // ─── F8 : Détection SIM / Numéro ───────────────────────────────────────
+    // ─── Détection SIM / Numéro de téléphone ─────────────────────────────────
 
     /**
      * Récupère la liste des cartes SIM actives et de leurs numéros associés.

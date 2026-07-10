@@ -33,11 +33,11 @@ npx cap sync
 Ajouter dans `android/app/src/main/AndroidManifest.xml` de **votre application** :
 
 ```xml
-<!-- Requis pour l'historique et réception de SMS (V1) -->
+<!-- Requis pour l'historique et la réception de SMS -->
 <uses-permission android:name="android.permission.READ_SMS" />
 <uses-permission android:name="android.permission.RECEIVE_SMS" />
 
-<!-- Requis pour la détection SIM / Numéro (F8 - V2) -->
+<!-- Requis pour la détection SIM / Numéro -->
 <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
 ```
@@ -179,7 +179,7 @@ const handle = await SmsVault.addListener('otpReceived', (data) => {
 await SmsVault.startSmsRetriever();
 ```
 
-### Détecter les cartes SIM actives (F8)
+### Détecter les cartes SIM actives
 
 Récupère les informations des cartes SIM actives et leurs numéros de téléphone si disponibles (sans garantie pour le numéro de téléphone qui dépend de l'opérateur).
 

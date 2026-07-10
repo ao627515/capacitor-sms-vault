@@ -11,7 +11,7 @@ import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.common.api.Status
 
 /**
- * Classe d'aide pour encapsuler l'utilisation de la SMS Retriever API (V2).
+ * Classe d'aide pour encapsuler l'utilisation de la SMS Retriever API.
  * Permet de capter un message OTP sans aucune permission SMS (READ_SMS/RECEIVE_SMS).
  * Le cycle de vie est à usage unique (s'autodétruit après succès ou timeout de 5 minutes).
  */

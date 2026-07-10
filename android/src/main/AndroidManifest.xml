@@ -1,11 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- F1 : Permissions SMS -->
+    <!-- Permissions SMS -->
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
 
     <application>
-        <!-- F4 : BroadcastReceiver pour l'interception temps réel des SMS entrants -->
+        <!-- BroadcastReceiver pour l'interception temps réel des SMS entrants -->
         <!-- exported="false" : enregistré dynamiquement par le plugin via registerReceiver() -->
         <receiver
             android:name=".SmsReceiver"

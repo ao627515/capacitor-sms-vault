@@ -62,7 +62,7 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.core:core-ktx:$androidxCoreKTXVersion"
     
-    // SMS Retriever API (V2)
+    // SMS Retriever API
     implementation 'com.google.android.gms:play-services-auth-api-phone:18.1.0'
 
     testImplementation "junit:junit:$junitVersion"
