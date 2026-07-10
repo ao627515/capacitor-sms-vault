@@ -3,14 +3,19 @@ package com.oaalab.capacitorsmsvault
 import android.Manifest
 import android.content.Context
 import android.content.IntentFilter
+import android.database.ContentObserver
+import android.database.Cursor
+import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Telephony
+import android.telephony.SubscriptionManager
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Logger
 import com.getcapacitor.PermissionState
 import com.getcapacitor.Plugin
-import android.telephony.SubscriptionManager
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.ActivityCallback
@@ -52,6 +57,7 @@ class SmsVaultPlugin : Plugin() {
 
     companion object {
         private const val TAG = "SmsVaultPlugin"
+
         // Intent action for changing default SMS app on Android 6-9
         private const val ACTION_CHANGE_DEFAULT_SMS_APP =
             "android.provider.Telephony.ACTION_CHANGE_DEFAULT_SMS_APP"
@@ -64,6 +70,12 @@ class SmsVaultPlugin : Plugin() {
     private lateinit var smsReader: SmsReader
     private var smsRetrieverHelper: SmsRetrieverHelper? = null
 
+    // Cache pour la déduplication d'événements SMS
+    private val recentSmsIds = BoundedSet<String>(100)
+    private val recentSmsFingerprints = BoundedSet<String>(100)
+
+    private var smsContentObserver: SmsContentObserver? = null
+
     // ─── Lifecycle ───────────────────────────────────────────────────────────
 
     override fun load() {
@@ -73,23 +85,41 @@ class SmsVaultPlugin : Plugin() {
     }
 
     /**
-     * Méthode publique appelée par SmsReceiver pour notifier JS d'un SMS entrant.
-     * notifyListeners() est protected dans Plugin — on l'expose via ce wrapper public.
+     * Méthode publique appelée par SmsReceiver ou SmsContentObserver pour notifier JS d'un SMS entrant.
      */
     fun notifySmsReceived(smsObj: JSObject) {
+        val addressVal = smsObj.getString("address") ?: ""
+        val bodyVal = smsObj.getString("body") ?: ""
+        val idVal = smsObj.getString("id") ?: ""
+
+        val fingerprint = "$addressVal|$bodyVal"
+        if (idVal.isNotEmpty()) {
+            recentSmsIds.add(idVal)
+        }
+        recentSmsFingerprints.add(fingerprint)
+
         notifyListeners("smsReceived", smsObj)
     }
 
     override fun handleOnDestroy() {
-        // Nettoyage : désenregistrer le receiver si l'activité est détruite
+        // Nettoyage : désenregistrer le receiver et l'observer si l'activité est détruite
         if (isListening) {
             try {
                 context.unregisterReceiver(smsReceiver)
-                isListening = false
-                Logger.info(TAG, "SmsReceiver unregistered on destroy")
             } catch (e: Exception) {
-                Logger.warn(TAG, "handleOnDestroy: receiver was not registered")
+                // Ignore
             }
+
+            smsContentObserver?.let { observer ->
+                try {
+                    context.contentResolver.unregisterContentObserver(observer)
+                } catch (e: Exception) {
+                    // Ignore
+                }
+                smsContentObserver = null
+            }
+            isListening = false
+            Logger.info(TAG, "SmsReceiver and SmsContentObserver unregistered on destroy")
         }
         smsRetrieverHelper?.stop()
         super.handleOnDestroy()
@@ -104,39 +134,55 @@ class SmsVaultPlugin : Plugin() {
     override fun checkPermissions(call: PluginCall) {
         val readState = getPermissionState("readSms")
         val receiveState = getPermissionState("receiveSms")
-        call.resolve(buildPermissionResult(readState, receiveState))
+        val phoneState = getPermissionState("phone")
+        
+        val result = JSObject().apply {
+            put("readSms", readState?.toString() ?: "prompt")
+            put("receiveSms", receiveState?.toString() ?: "prompt")
+            put("phone", phoneState?.toString() ?: "prompt")
+        }
+        call.resolve(result)
     }
 
     /**
-     * Demande les permissions READ_SMS et RECEIVE_SMS à l'utilisateur.
+     * Demande les permissions à l'utilisateur.
      */
     @PluginMethod
     override fun requestPermissions(call: PluginCall) {
-        // Si les deux permissions sont déjà accordées, retourner directement
-        if (getPermissionState("readSms") == PermissionState.GRANTED &&
-            getPermissionState("receiveSms") == PermissionState.GRANTED
-        ) {
-            checkPermissions(call)
+        // Si les permissions sont déjà accordées, on résout immédiatement
+        val readState = getPermissionState("readSms")
+        val receiveState = getPermissionState("receiveSms")
+        val phoneState = getPermissionState("phone")
+
+        if (readState == PermissionState.GRANTED && 
+            receiveState == PermissionState.GRANTED && 
+            phoneState == PermissionState.GRANTED) {
+            
+            val result = JSObject().apply {
+                put("readSms", "granted")
+                put("receiveSms", "granted")
+                put("phone", "granted")
+            }
+            call.resolve(result)
             return
         }
-        requestPermissionForAliases(arrayOf("readSms", "receiveSms"), call, "permissionsCallback")
+
+        // Sinon, demande via le framework Capacitor
+        requestPermissionForAliases(arrayOf("readSms", "receiveSms", "phone"), call, "permissionsCallback")
     }
 
     @PermissionCallback
     private fun permissionsCallback(call: PluginCall) {
         val readState = getPermissionState("readSms")
         val receiveState = getPermissionState("receiveSms")
-        call.resolve(buildPermissionResult(readState, receiveState))
-    }
-
-    private fun buildPermissionResult(
-        readState: PermissionState?,
-        receiveState: PermissionState?
-    ): JSObject {
-        return JSObject().apply {
+        val phoneState = getPermissionState("phone")
+        
+        val result = JSObject().apply {
             put("readSms", readState?.toString() ?: "prompt")
             put("receiveSms", receiveState?.toString() ?: "prompt")
+            put("phone", phoneState?.toString() ?: "prompt")
         }
+        call.resolve(result)
     }
 
     // ─── Application SMS par défaut ──────────────────────────────────────────
@@ -153,29 +199,28 @@ class SmsVaultPlugin : Plugin() {
     }
 
     /**
-     * Ouvre le dialogue système pour changer l'application SMS par défaut.
-     * Sur Android 10+ (API 29+) : utilise RoleManager.
-     * Sur Android 6-9 : utilise l'intent ACTION_CHANGE_DEFAULT_SMS_APP.
+     * Demande à définir cette app comme l'app SMS par défaut.
      */
     @PluginMethod
     fun requestDefaultSmsApp(call: PluginCall) {
-        // Vérifier d'abord si on est déjà l'app par défaut
-        if (Telephony.Sms.getDefaultSmsPackage(context) == context.packageName) {
+        val isDefault = Telephony.Sms.getDefaultSmsPackage(context) == context.packageName
+        if (isDefault) {
+            Logger.info(TAG, "requestDefaultSmsApp: already default app, resolve")
             call.resolve(JSObject().put("isDefault", true))
             return
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Android 10+ : RoleManager
-            val roleManager = context.getSystemService(android.app.role.RoleManager::class.java)
-            if (roleManager == null) {
-                call.reject("ROLE_MANAGER_UNAVAILABLE", "RoleManager not available on this device")
-                return
+            // Android 10+ : Utiliser RoleManager (recommandé et requis)
+            val roleManager = context.getSystemService(Context.ROLE_SERVICE) as android.app.role.RoleManager
+            if (roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_SMS)) {
+                val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_SMS)
+                startActivityForResult(call, intent, "defaultSmsAppCallback")
+            } else {
+                call.reject("ROLE_UNAVAILABLE", "SMS role is not available on this device")
             }
-            val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_SMS)
-            startActivityForResult(call, intent, "defaultSmsAppCallback")
         } else {
-            // Android 6-9 : intent classique
+            // Android 6-9 : Utiliser l'ancien Intent Action
             val intent = android.content.Intent(ACTION_CHANGE_DEFAULT_SMS_APP).apply {
                 putExtra(EXTRA_PACKAGE_NAME, context.packageName)
             }
@@ -184,11 +229,10 @@ class SmsVaultPlugin : Plugin() {
     }
 
     @ActivityCallback
-    private fun defaultSmsAppCallback(call: PluginCall?, result: androidx.activity.result.ActivityResult) {
-        val resolveCall = call ?: return
+    private fun defaultSmsAppCallback(call: PluginCall, result: androidx.activity.result.ActivityResult) {
         val isDefault = Telephony.Sms.getDefaultSmsPackage(context) == context.packageName
         Logger.info(TAG, "defaultSmsAppCallback: isDefault=$isDefault")
-        resolveCall.resolve(JSObject().put("isDefault", isDefault))
+        call.resolve(JSObject().put("isDefault", isDefault))
     }
 
     // ─── Lecture de l'historique SMS ─────────────────────────────────────────
@@ -264,8 +308,7 @@ class SmsVaultPlugin : Plugin() {
     // ─── Interception des SMS en temps réel ──────────────────────────────────
 
     /**
-     * Démarre l'écoute des SMS entrants via BroadcastReceiver.
-     * Requiert RECEIVE_SMS.
+     * Démarre l'écoute des SMS entrants (BroadcastReceiver, ContentObserver ou les deux).
      */
     @PluginMethod
     fun startListening(call: PluginCall) {
@@ -280,21 +323,42 @@ class SmsVaultPlugin : Plugin() {
             return
         }
 
+        val strategy = call.getString("strategy") ?: "broadcast"
+        Logger.info(TAG, "startListening invoked with strategy: $strategy")
+
         try {
-            val filter = IntentFilter(Telephony.Sms.Intents.SMS_RECEIVED_ACTION).apply {
-                priority = IntentFilter.SYSTEM_HIGH_PRIORITY
+            recentSmsIds.clear()
+            recentSmsFingerprints.clear()
+
+            // 1. Enregistrer le BroadcastReceiver
+            if (strategy == "broadcast" || strategy == "both") {
+                val filter = IntentFilter(Telephony.Sms.Intents.SMS_RECEIVED_ACTION).apply {
+                    priority = IntentFilter.SYSTEM_HIGH_PRIORITY
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    context.registerReceiver(smsReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                } else {
+                    @Suppress("UnspecifiedRegisterReceiverFlag")
+                    context.registerReceiver(smsReceiver, filter)
+                }
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                // Android 13+ : le flag RECEIVER_NOT_EXPORTED est requis pour les receivers non-exportés
-                context.registerReceiver(smsReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-            } else {
-                @Suppress("UnspecifiedRegisterReceiverFlag")
-                context.registerReceiver(smsReceiver, filter)
+            // 2. Enregistrer le ContentObserver
+            if (strategy == "observer" || strategy == "both") {
+                val observer = SmsContentObserver(Handler(Looper.getMainLooper()), context) {
+                    handleSmsDbChange()
+                }
+                context.contentResolver.registerContentObserver(
+                    Telephony.Sms.CONTENT_URI,
+                    true,
+                    observer
+                )
+                smsContentObserver = observer
             }
 
             isListening = true
-            Logger.info(TAG, "SMS listening started")
+            Logger.info(TAG, "SMS listening started with strategy: $strategy")
             call.resolve()
         } catch (e: Exception) {
             Logger.error(TAG, "startListening failed", e)
@@ -303,7 +367,7 @@ class SmsVaultPlugin : Plugin() {
     }
 
     /**
-     * Arrête l'écoute des SMS entrants et libère le BroadcastReceiver.
+     * Arrête l'écoute des SMS entrants.
      */
     @PluginMethod
     fun stopListening(call: PluginCall) {
@@ -314,12 +378,29 @@ class SmsVaultPlugin : Plugin() {
         }
 
         try {
-            context.unregisterReceiver(smsReceiver)
+            // Unregister BroadcastReceiver
+            try {
+                context.unregisterReceiver(smsReceiver)
+            } catch (e: Exception) {
+                // Ignore
+            }
+
+            // Unregister ContentObserver
+            smsContentObserver?.let { observer ->
+                try {
+                    context.contentResolver.unregisterContentObserver(observer)
+                } catch (e: Exception) {
+                    // Ignore
+                }
+                smsContentObserver = null
+            }
+
             isListening = false
+            recentSmsIds.clear()
+            recentSmsFingerprints.clear()
             Logger.info(TAG, "SMS listening stopped")
         } catch (e: Exception) {
-            // Ne pas rejeter l'appel si le receiver n'était pas enregistré
-            Logger.warn(TAG, "stopListening: receiver was not registered — ${e.message}")
+            Logger.warn(TAG, "stopListening failed — ${e.message}")
             isListening = false
         }
         call.resolve()
@@ -355,6 +436,7 @@ class SmsVaultPlugin : Plugin() {
     /**
      * Récupère la liste des cartes SIM actives et de leurs numéros associés.
      */
+    @Suppress("DEPRECATION")
     @PluginMethod
     fun getSimInfo(call: PluginCall) {
         if (getPermissionState("phone") != PermissionState.GRANTED) {
@@ -363,38 +445,147 @@ class SmsVaultPlugin : Plugin() {
         }
 
         try {
+            val simCardsList = JSArray()
             val subscriptionManager = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
+
             val activeSubscriptions = subscriptionManager.activeSubscriptionInfoList
+            if (activeSubscriptions != null) {
+                for (subInfo in activeSubscriptions) {
+                    val simInfo = JSObject()
+                    simInfo.put("carrierName", subInfo.carrierName?.toString() ?: "")
+                    simInfo.put("countryIso", subInfo.countryIso?.toString() ?: "")
+                    simInfo.put("simSlotIndex", subInfo.simSlotIndex)
+                    simInfo.put("subscriptionId", subInfo.subscriptionId)
 
-            val simCardsArray = JSArray()
-            activeSubscriptions?.forEach { info ->
-                val simObj = JSObject().apply {
-                    put("carrierName", info.carrierName?.toString() ?: "")
-                    put("countryIso", info.countryIso ?: "")
-                    put("simSlotIndex", info.simSlotIndex)
-                    put("subscriptionId", info.subscriptionId)
-                    
-                    // Récupérer le numéro de téléphone (API 33+ : getPhoneNumber, API <33 : info.number)
                     val number = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        subscriptionManager.getPhoneNumber(info.subscriptionId)
+                        try {
+                            subscriptionManager.getPhoneNumber(subInfo.subscriptionId) ?: ""
+                        } catch (e: SecurityException) {
+                            subInfo.number ?: ""
+                        }
                     } else {
-                        @Suppress("DEPRECATION")
-                        info.number
+                        subInfo.number ?: ""
                     }
-                    put("phoneNumber", number ?: "")
+                    simInfo.put("phoneNumber", number)
+
+                    simCardsList.put(simInfo)
                 }
-                simCardsArray.put(simObj)
             }
 
-            val result = JSObject().apply {
-                put("simCards", simCardsArray)
-            }
-            call.resolve(result)
-        } catch (e: SecurityException) {
-            call.reject("PERMISSION_DENIED", "Access to telephony information was denied", e)
+            val response = JSObject()
+            response.put("simCards", simCardsList)
+            call.resolve(response)
         } catch (e: Exception) {
             Logger.error(TAG, "getSimInfo failed", e)
-            call.reject("SIM_INFO_FAILED", "Failed to retrieve SIM card information: ${e.message}", e)
+            call.reject("SIM_INFO_FAILED", "Failed to get SIM info: ${e.message}", e)
+        }
+    }
+
+    // ─── Classes internes utilitaires ────────────────────────────────────────
+
+    /**
+     * Implémentation du ContentObserver pour content://sms.
+     */
+    private inner class SmsContentObserver(
+        handler: Handler,
+        private val context: Context,
+        private val onChangeCallback: () -> Unit
+    ) : ContentObserver(handler) {
+        override fun onChange(selfChange: Boolean, uri: Uri?) {
+            super.onChange(selfChange, uri)
+            onChangeCallback()
+        }
+    }
+
+    /**
+     * Structure de cache ordonnée avec taille limite.
+     */
+    private class BoundedSet<T>(private val maxSize: Int) {
+        private val set = LinkedHashSet<T>()
+
+        @Synchronized
+        fun add(element: T): Boolean {
+            if (set.contains(element)) return false
+            if (set.size >= maxSize) {
+                val iterator = set.iterator()
+                if (iterator.hasNext()) {
+                    iterator.next()
+                    iterator.remove()
+                }
+            }
+            return set.add(element)
+        }
+
+        @Synchronized
+        fun contains(element: T): Boolean = set.contains(element)
+
+        @Synchronized
+        fun clear() = set.clear()
+    }
+
+    private fun handleSmsDbChange() {
+        val now = System.currentTimeMillis()
+        val tenSecondsAgo = now - 10000
+
+        var cursor: Cursor? = null
+        try {
+            cursor = context.contentResolver.query(
+                Telephony.Sms.CONTENT_URI,
+                arrayOf(
+                    Telephony.Sms._ID,
+                    Telephony.Sms.ADDRESS,
+                    Telephony.Sms.BODY,
+                    Telephony.Sms.DATE,
+                    Telephony.Sms.TYPE
+                ),
+                "${Telephony.Sms.DATE} >= ?",
+                arrayOf(tenSecondsAgo.toString()),
+                "${Telephony.Sms.DATE} DESC"
+            )
+
+            cursor?.let { c ->
+                val idIndex = c.getColumnIndexOrThrow(Telephony.Sms._ID)
+                val addressIndex = c.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
+                val bodyIndex = c.getColumnIndexOrThrow(Telephony.Sms.BODY)
+                val dateIndex = c.getColumnIndexOrThrow(Telephony.Sms.DATE)
+                val typeIndex = c.getColumnIndexOrThrow(Telephony.Sms.TYPE)
+
+                while (c.moveToNext()) {
+                    val idVal = c.getString(idIndex) ?: ""
+                    val addressVal = c.getString(addressIndex) ?: ""
+                    val bodyVal = c.getString(bodyIndex) ?: ""
+                    val dateVal = c.getLong(dateIndex)
+                    val typeVal = c.getInt(typeIndex)
+
+                    val fingerprint = "$addressVal|$bodyVal"
+
+                    // Déduplication
+                    if (recentSmsIds.contains(idVal)) continue
+                    if (recentSmsFingerprints.contains(fingerprint)) {
+                        // Déjà traité par le BroadcastReceiver, on retient l'ID
+                        recentSmsIds.add(idVal)
+                        continue
+                    }
+
+                    recentSmsIds.add(idVal)
+                    recentSmsFingerprints.add(fingerprint)
+
+                    val smsObj = JSObject().apply {
+                        put("id", idVal)
+                        put("address", addressVal)
+                        put("body", bodyVal)
+                        put("date", dateVal)
+                        put("type", typeVal)
+                    }
+
+                    notifySmsReceived(smsObj)
+                    Logger.info(TAG, "New SMS detected via ContentObserver, ID: $idVal")
+                }
+            }
+        } catch (e: Exception) {
+            Logger.error(TAG, "handleSmsDbChange failed", e)
+        } finally {
+            cursor?.close()
         }
     }
 }

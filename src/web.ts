@@ -43,7 +43,7 @@ export class SmsVaultWeb extends WebPlugin implements SmsVaultPlugin {
     throw this.unavailable('SmsVault is not available on web.');
   }
 
-  async startListening(): Promise<void> {
+  async startListening(_options?: { strategy?: 'broadcast' | 'observer' | 'both' }): Promise<void> {
     throw this.unavailable('SmsVault is not available on web.');
   }
 

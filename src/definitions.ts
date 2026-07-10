@@ -120,6 +120,10 @@ export interface SmsFilter {
   indexFrom?: number;
   /** Nombre maximum de résultats (défaut : 100) */
   maxCount?: number;
+  /** Filtrer par statut de lecture (0 = non lu, 1 = lu) */
+  read?: number;
+  /** Ordre de tri (date_desc ou date_asc, défaut : date_desc) */
+  orderBy?: 'date_desc' | 'date_asc';
 }
 
 // ─────────────────────────────────────────────
@@ -198,11 +202,11 @@ export interface SmsVaultPlugin {
   // ── Interception temps réel ───────────────────
 
   /**
-   * Démarre l'écoute des SMS entrants via un BroadcastReceiver dynamique.
+   * Démarre l'écoute des SMS entrants via un BroadcastReceiver ou un ContentObserver.
    * Requiert la permission RECEIVE_SMS.
    * Émet l'événement 'smsReceived' à chaque nouveau SMS reçu.
    */
-  startListening(): Promise<void>;
+  startListening(options?: { strategy?: 'broadcast' | 'observer' | 'both' }): Promise<void>;
 
   /**
    * Arrête l'écoute des SMS entrants.

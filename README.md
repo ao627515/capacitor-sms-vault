@@ -148,6 +148,13 @@ const { messages: rawMessages } = await SmsVault.getRawSmsList({
 console.log('SMS brut pour débogage :', rawMessages);
 ```
 
+#### Règles de Filtrage et Priorités
+
+Les filtres de `SmsFilter` sont classés en trois groupes :
+1. **Groupe A — Filtres cumulatifs (AND)** : `minDate`, `maxDate`, `bodyRegex`, `orderBy`, `read`, `maxCount`, `indexFrom`. Ils s'appliquent tous simultanément.
+2. **Groupe B — Filtres exclusifs (Priorité OR implicite)** : `id`, `threadId`, `address`, `addressRegex`, `body`. **N'en utiliser qu'un seul à la fois.** Si plusieurs sont fournis, la priorité suivante est appliquée : `id > threadId > address > addressRegex > body`. Seul le premier filtre valide trouvé selon cette priorité est appliqué (les autres sont ignorés).
+3. **Groupe C — Pagination** : `indexFrom` + `maxCount` (cumulables avec tout, appliqués en dernier).
+
 ### Intercepter les SMS en temps réel
 
 ```typescript
@@ -156,8 +163,12 @@ const handle = await SmsVault.addListener('smsReceived', (sms) => {
   console.log('SMS reçu de', sms.address, ':', sms.body);
 });
 
-// 2. Démarrer l'écoute
+// 2. Démarrer l'écoute (par défaut 'broadcast')
 await SmsVault.startListening();
+
+// OU : Stratégie hybride recommandée pour les applications critiques / Fintech (UEMOA, Tecno/Infinix)
+// active le BroadcastReceiver et le ContentObserver simultanément avec déduplication par id
+await SmsVault.startListening({ strategy: 'both' });
 
 // 3. Plus tard, nettoyer
 await SmsVault.stopListening();
@@ -358,14 +369,18 @@ Retourne toutes les colonnes brutes de la table SMS Android, sans mapping, pour 
 --------------------
 
 
-### startListening()
+### startListening(...)
 
 ```typescript
-startListening() => Promise<void>
+startListening(options?: { strategy?: 'broadcast' | 'observer' | 'both'; } | undefined) => Promise<void>
 ```
 
-Démarre l'écoute des SMS entrants via un BroadcastReceiver dynamique.
+Démarre l'écoute des SMS entrants (BroadcastReceiver, ContentObserver ou les deux).
 Requiert la permission RECEIVE_SMS.
+
+| Param         | Type                                                                               | Description                                                                                                   |
+| ------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **`options`** | <code>{ strategy?: 'broadcast' \| 'observer' \| 'both'; }</code> | Stratégie d'écoute : 'broadcast' (défaut), 'observer' (ContentObserver), 'both' (les deux avec déduplication) |
 
 --------------------
 

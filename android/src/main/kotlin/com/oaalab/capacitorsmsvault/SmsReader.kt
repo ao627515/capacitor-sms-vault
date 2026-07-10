@@ -59,7 +59,15 @@ class SmsReader(private val context: Context) {
         val finalSelection = if (selection.isEmpty()) null else selection.joinToString(" AND ")
         val finalSelectionArgs = if (selectionArgs.isEmpty()) null else selectionArgs.toTypedArray()
 
-        // 3. Préparer les Regex (pour filtrage tardif en Kotlin)
+        // 3. Déterminer l'ordre de tri (date ASC ou DESC)
+        val orderByStr = filterObj?.getString("orderBy")
+        val sortOrder = when (orderByStr) {
+            "date_asc"  -> "${Telephony.Sms.DATE} ASC"
+            "date_desc" -> "${Telephony.Sms.DATE} DESC"
+            else        -> "${Telephony.Sms.DATE} DESC"
+        }
+
+        // 4. Préparer les Regex (pour filtrage tardif en Kotlin)
         val addressRegexStr = filterObj?.getString("addressRegex")
         val addressRegex = addressRegexStr?.toRegex(RegexOption.IGNORE_CASE)
 
@@ -77,7 +85,7 @@ class SmsReader(private val context: Context) {
                 projectionList.toTypedArray(),
                 finalSelection,
                 finalSelectionArgs,
-                "${Telephony.Sms.DATE} DESC"
+                sortOrder
             )
 
             cursor?.let { c ->
@@ -241,6 +249,13 @@ class SmsReader(private val context: Context) {
         val indexFrom = filterObj?.getInteger("indexFrom") ?: 0
         val maxCount = filterObj?.getInteger("maxCount") ?: DEFAULT_LIMIT
 
+        val orderByStr = filterObj?.getString("orderBy")
+        val sortOrder = when (orderByStr) {
+            "date_asc"  -> "${Telephony.Sms.DATE} ASC"
+            "date_desc" -> "${Telephony.Sms.DATE} DESC"
+            else        -> "${Telephony.Sms.DATE} DESC"
+        }
+
         var cursor: Cursor? = null
         try {
             // null en projection = toutes les colonnes
@@ -249,7 +264,7 @@ class SmsReader(private val context: Context) {
                 null,
                 finalSelection,
                 finalSelectionArgs,
-                "${Telephony.Sms.DATE} DESC"
+                sortOrder
             )
 
             cursor?.let { c ->
@@ -312,18 +327,7 @@ class SmsReader(private val context: Context) {
         selectionArgs: MutableList<String>
     ) {
         if (filterObj != null) {
-            val id = filterObj.getString("id")
-            if (id != null) {
-                selection.add("${Telephony.Sms._ID} = ?")
-                selectionArgs.add(id)
-            }
-
-            val threadId = filterObj.getString("threadId")
-            if (threadId != null) {
-                selection.add("${Telephony.Sms.THREAD_ID} = ?")
-                selectionArgs.add(threadId)
-            }
-
+            // ─── Groupe A : Filtres cumulatifs (AND) ───
             val type = filterObj.getInteger("type")
             if (type != null && type != 0) {
                 selection.add("${Telephony.Sms.TYPE} = ?")
@@ -332,18 +336,6 @@ class SmsReader(private val context: Context) {
                 // Par défaut : INBOX (type = 1)
                 selection.add("${Telephony.Sms.TYPE} = ?")
                 selectionArgs.add("1")
-            }
-
-            val address = filterObj.getString("address")
-            if (address != null) {
-                selection.add("${Telephony.Sms.ADDRESS} LIKE ?")
-                selectionArgs.add("%$address%")
-            }
-
-            val body = filterObj.getString("body")
-            if (body != null) {
-                selection.add("${Telephony.Sms.BODY} LIKE ?")
-                selectionArgs.add("%$body%")
             }
 
             if (filterObj.has("minDate")) {
@@ -356,6 +348,35 @@ class SmsReader(private val context: Context) {
                 val maxDate = filterObj.getLong("maxDate")
                 selection.add("${Telephony.Sms.DATE} <= ?")
                 selectionArgs.add(maxDate.toString())
+            }
+
+            if (filterObj.has("read")) {
+                val readVal = filterObj.getInteger("read")
+                selection.add("${Telephony.Sms.READ} = ?")
+                selectionArgs.add(readVal.toString())
+            }
+
+            // ─── Groupe B : Filtres exclusifs (Priorité : id > threadId > address > addressRegex > body) ───
+            val id = filterObj.getString("id")
+            val threadId = filterObj.getString("threadId")
+            val address = filterObj.getString("address")
+            val addressRegex = filterObj.getString("addressRegex")
+            val body = filterObj.getString("body")
+
+            if (id != null) {
+                selection.add("${Telephony.Sms._ID} = ?")
+                selectionArgs.add(id)
+            } else if (threadId != null) {
+                selection.add("${Telephony.Sms.THREAD_ID} = ?")
+                selectionArgs.add(threadId)
+            } else if (address != null) {
+                selection.add("${Telephony.Sms.ADDRESS} = ?")
+                selectionArgs.add(address)
+            } else if (addressRegex != null) {
+                // Filtré tardivement en mémoire (Kotlin)
+            } else if (body != null) {
+                selection.add("${Telephony.Sms.BODY} LIKE ?")
+                selectionArgs.add("%$body%")
             }
         } else {
             // Comportement par défaut : boîte INBOX (type = 1)
