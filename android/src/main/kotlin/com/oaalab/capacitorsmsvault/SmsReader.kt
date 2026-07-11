@@ -35,22 +35,37 @@ class SmsReader(private val context: Context) {
             "sub_id"
         )
 
-        val hasThreadId = projectionObj?.getBoolean("threadId") == true
+        val hasThreadId = projectionObj?.optBoolean("threadId") == true
         if (hasThreadId) projectionList.add(Telephony.Sms.THREAD_ID)
 
-        val hasSubject = projectionObj?.getBoolean("subject") == true
+        val hasSubject = projectionObj?.optBoolean("subject") == true
         if (hasSubject) projectionList.add(Telephony.Sms.SUBJECT)
 
-        val hasDateSent = projectionObj?.getBoolean("dateSent") == true
+        val hasDateSent = projectionObj?.optBoolean("dateSent") == true
         if (hasDateSent) projectionList.add(Telephony.Sms.DATE_SENT)
 
-        val hasCreator = projectionObj?.getBoolean("creator") == true
+        val hasCreator = projectionObj?.optBoolean("creator") == true
         if (hasCreator && Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             projectionList.add(Telephony.Sms.CREATOR)
         }
 
-        val hasPerson = projectionObj?.getBoolean("person") == true
+        val hasPerson = projectionObj?.optBoolean("person") == true
         if (hasPerson) projectionList.add(Telephony.Sms.PERSON)
+
+        val hasSeen = projectionObj?.optBoolean("seen") == true
+        if (hasSeen) projectionList.add(Telephony.Sms.SEEN)
+
+        val hasStatus = projectionObj?.optBoolean("status") == true
+        if (hasStatus) projectionList.add(Telephony.Sms.STATUS)
+
+        val hasErrorCode = projectionObj?.optBoolean("errorCode") == true
+        if (hasErrorCode) projectionList.add(Telephony.Sms.ERROR_CODE)
+
+        val hasLocked = projectionObj?.optBoolean("locked") == true
+        if (hasLocked) projectionList.add(Telephony.Sms.LOCKED)
+
+        val hasServiceCenter = projectionObj?.optBoolean("serviceCenter") == true
+        if (hasServiceCenter) projectionList.add(Telephony.Sms.SERVICE_CENTER)
 
         // 2. Construire la clause WHERE
         val selection = mutableListOf<String>()
@@ -104,6 +119,11 @@ class SmsReader(private val context: Context) {
                     c.getColumnIndexOrThrow(Telephony.Sms.CREATOR)
                 } else -1
                 val personIdx = if (hasPerson) c.getColumnIndexOrThrow(Telephony.Sms.PERSON) else -1
+                val seenIdx = if (hasSeen) c.getColumnIndexOrThrow(Telephony.Sms.SEEN) else -1
+                val statusIdx = if (hasStatus) c.getColumnIndexOrThrow(Telephony.Sms.STATUS) else -1
+                val errorCodeIdx = if (hasErrorCode) c.getColumnIndexOrThrow(Telephony.Sms.ERROR_CODE) else -1
+                val lockedIdx = if (hasLocked) c.getColumnIndexOrThrow(Telephony.Sms.LOCKED) else -1
+                val serviceCenterIdx = if (hasServiceCenter) c.getColumnIndexOrThrow(Telephony.Sms.SERVICE_CENTER) else -1
 
                 var matchCount = 0
                 var addedCount = 0
@@ -139,6 +159,11 @@ class SmsReader(private val context: Context) {
                                 if (hasDateSent && dateSentIdx != -1) put("dateSent", c.getLong(dateSentIdx))
                                 if (hasCreator && creatorIdx != -1) put("creator", c.getString(creatorIdx) ?: "")
                                 if (hasPerson && personIdx != -1) put("person", c.getString(personIdx) ?: "")
+                                if (hasSeen && seenIdx != -1) put("seen", c.getInt(seenIdx) == 1)
+                                if (hasStatus && statusIdx != -1) put("status", c.getInt(statusIdx))
+                                if (hasErrorCode && errorCodeIdx != -1) put("errorCode", c.getInt(errorCodeIdx))
+                                if (hasLocked && lockedIdx != -1) put("locked", c.getInt(lockedIdx) == 1)
+                                if (hasServiceCenter && serviceCenterIdx != -1) put("serviceCenter", c.getString(serviceCenterIdx) ?: "")
                             }
                             result.put(smsObj)
                             addedCount++
@@ -360,6 +385,12 @@ class SmsReader(private val context: Context) {
                 val readVal = filterObj.getInteger("read")
                 selection.add("${Telephony.Sms.READ} = ?")
                 selectionArgs.add(readVal.toString())
+            }
+
+            if (filterObj.has("seen")) {
+                val seenVal = filterObj.getInteger("seen")
+                selection.add("${Telephony.Sms.SEEN} = ?")
+                selectionArgs.add(seenVal.toString())
             }
 
             // ─── Groupe B : Filtres exclusifs (Priorité : id > threadId > address > addressRegex > body) ───

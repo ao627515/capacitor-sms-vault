@@ -27,6 +27,7 @@ class ShadowSmsMessage {
         var mockAddress: String? = null
         var mockBody: String? = null
         var mockTimestamp: Long = 0L
+        var mockServiceCenter: String? = null
         var returnNull = false
 
         @JvmStatic
@@ -57,6 +58,11 @@ class ShadowSmsMessage {
     fun getTimestampMillis(): Long {
         return mockTimestamp
     }
+
+    @Implementation
+    fun getServiceCenterAddress(): String? {
+        return mockServiceCenter
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -79,6 +85,7 @@ class SmsReceiverTest {
         ShadowSmsMessage.mockAddress = null
         ShadowSmsMessage.mockBody = null
         ShadowSmsMessage.mockTimestamp = 0L
+        ShadowSmsMessage.mockServiceCenter = null
         ShadowSmsMessage.returnNull = false
     }
 
@@ -88,6 +95,7 @@ class SmsReceiverTest {
         ShadowSmsMessage.mockAddress = "0601020304"
         ShadowSmsMessage.mockBody = "Votre code d'activation est 4567."
         ShadowSmsMessage.mockTimestamp = 1234567890L
+        ShadowSmsMessage.mockServiceCenter = "+22689001234"
 
         // Créer un Intent avec des PDUs fictifs
         val intent = Intent(Telephony.Sms.Intents.SMS_RECEIVED_ACTION).apply {
@@ -105,6 +113,11 @@ class SmsReceiverTest {
         assertEquals("Votre code d'activation est 4567.", jsObject.getString("body"))
         assertEquals(1234567890L, jsObject.getLong("date"))
         assertEquals(1, jsObject.getInt("type")) // MessageType.INBOX = 1
+        assertEquals(false, jsObject.getBoolean("seen"))
+        assertEquals(false, jsObject.getBoolean("locked"))
+        assertEquals(-1, jsObject.getInt("status"))
+        assertEquals(0, jsObject.getInt("errorCode"))
+        assertEquals("+22689001234", jsObject.getString("serviceCenter"))
     }
 
     @Test

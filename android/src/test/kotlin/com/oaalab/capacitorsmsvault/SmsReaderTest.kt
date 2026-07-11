@@ -47,7 +47,12 @@ class SmsReaderTest {
                             date_sent INTEGER,
                             creator TEXT,
                             person INTEGER,
-                            sub_id INTEGER
+                            sub_id INTEGER,
+                            seen INTEGER,
+                            status INTEGER,
+                            error_code INTEGER,
+                            locked INTEGER,
+                            service_center TEXT
                         )
                         """.trimIndent()
                     )
@@ -112,7 +117,12 @@ class SmsReaderTest {
         body: String,
         date: Long,
         type: Int = Telephony.Sms.MESSAGE_TYPE_INBOX,
-        read: Int = 1
+        read: Int = 1,
+        seen: Int = 1,
+        status: Int = -1,
+        errorCode: Int = 0,
+        locked: Int = 0,
+        serviceCenter: String? = null
     ) {
         val values = ContentValues().apply {
             put(Telephony.Sms.ADDRESS, address)
@@ -120,6 +130,13 @@ class SmsReaderTest {
             put(Telephony.Sms.DATE, date)
             put(Telephony.Sms.TYPE, type)
             put(Telephony.Sms.READ, read)
+            put(Telephony.Sms.SEEN, seen)
+            put(Telephony.Sms.STATUS, status)
+            put(Telephony.Sms.ERROR_CODE, errorCode)
+            put(Telephony.Sms.LOCKED, locked)
+            if (serviceCenter != null) {
+                put(Telephony.Sms.SERVICE_CENTER, serviceCenter)
+            }
         }
         val uri = context.contentResolver.insert(Telephony.Sms.CONTENT_URI, values)
         assertNotNull("L'insertion du SMS a échoué dans le provider Robolectric", uri)
@@ -284,5 +301,45 @@ class SmsReaderTest {
             put("bodyRegex", "Code: \\d{4}")
         }
         assertEquals(2, smsReader.getCount(filterRegex))
+    }
+
+    @Test
+    fun testGetSmsList_WithNewColumnsAndFilters() {
+        // Insérer un SMS avec seen=0, status=0 (COMPLETE), error_code=10, locked=1, service_center="+22689001234"
+        insertSms(
+            address = "0601020304",
+            body = "SMS de test avec nouvelles colonnes",
+            date = 1000L,
+            seen = 0,
+            status = 0,
+            errorCode = 10,
+            locked = 1,
+            serviceCenter = "+22689001234"
+        )
+
+        // 1. Filtrer sur seen = 0
+        val filterSeen = JSObject().apply {
+            put("seen", 0)
+        }
+        val messagesSeen = smsReader.getSmsList(filterSeen, null)
+        assertEquals(1, messagesSeen.length())
+
+        // 2. Projeter toutes les nouvelles colonnes
+        val projection = JSObject().apply {
+            put("seen", true)
+            put("status", true)
+            put("errorCode", true)
+            put("locked", true)
+            put("serviceCenter", true)
+        }
+        val messagesProj = smsReader.getSmsList(null, projection)
+        assertEquals(1, messagesProj.length())
+        
+        val sms = messagesProj.getJSONObject(0)
+        assertEquals(false, sms.getBoolean("seen")) // seen=0 -> false
+        assertEquals(0, sms.getInt("status"))
+        assertEquals(10, sms.getInt("errorCode"))
+        assertEquals(true, sms.getBoolean("locked")) // locked=1 -> true
+        assertEquals("+22689001234", sms.getString("serviceCenter"))
     }
 }

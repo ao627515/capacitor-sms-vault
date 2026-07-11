@@ -58,6 +58,11 @@ class SmsReceiver : BroadcastReceiver() {
                     put("body", smsMessage.messageBody ?: "")
                     put("date", smsMessage.timestampMillis)
                     put("type", 1) // MessageType.INBOX = 1
+                    put("seen", false)
+                    put("status", -1) // SmsDeliveryStatus.NONE
+                    put("errorCode", 0)
+                    put("locked", false)
+                    put("serviceCenter", smsMessage.serviceCenterAddress ?: "")
                     if (subscriptionId != -1) {
                         put("subscriptionId", subscriptionId)
                     }

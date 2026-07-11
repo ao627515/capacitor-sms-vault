@@ -25,6 +25,20 @@ export enum MessageType {
   QUEUED = 6,
 }
 
+/**
+ * Accusé de réception / statut de livraison du SMS.
+ */
+export enum SmsDeliveryStatus {
+  /** Aucun accusé de réception reçu */
+  NONE = -1,
+  /** SMS livré avec succès */
+  COMPLETE = 0,
+  /** Livraison en attente */
+  PENDING = 32,
+  /** Livraison échouée */
+  FAILED = 64,
+}
+
 // ─────────────────────────────────────────────
 // Interfaces de données
 // ─────────────────────────────────────────────
@@ -52,6 +66,16 @@ export interface SmsMessage {
   person?: string;
   /** Identifiant d'abonnement SIM réceptrice (Android uniquement) */
   subscriptionId?: number;
+  /** Indique si le message a été vu dans la liste/notification (Android uniquement) */
+  seen?: boolean;
+  /** Statut de livraison (Android uniquement) */
+  status?: SmsDeliveryStatus;
+  /** Code d'erreur associé à l'envoi/réception (Android uniquement) */
+  errorCode?: number;
+  /** Indique si le message est verrouillé contre la suppression (Android uniquement) */
+  locked?: boolean;
+  /** Numéro du centre de messagerie de l'opérateur (Android uniquement) */
+  serviceCenter?: string;
 }
 
 export interface PermissionStatus {
@@ -105,6 +129,11 @@ export interface SmsProjection {
   dateSent?: boolean;
   creator?: boolean;
   person?: boolean;
+  seen?: boolean;
+  status?: boolean;
+  errorCode?: boolean;
+  locked?: boolean;
+  serviceCenter?: boolean;
 }
 
 /**
@@ -137,6 +166,8 @@ export interface SmsFilter {
   maxCount?: number;
   /** Filtrer par statut de lecture (0 = non lu, 1 = lu) */
   read?: 0 | 1;
+  /** Filtrer par statut d'affichage notification (0 = non vu, 1 = vu) (Android uniquement) */
+  seen?: 0 | 1;
   /** Ordre de tri (date_desc ou date_asc, défaut : date_desc) */
   orderBy?: 'date_desc' | 'date_asc';
 }
@@ -324,18 +355,40 @@ export interface SmsVaultPlugin {
   /**
    * Marque un message SMS comme lu (définit le champ 'read' à 1).
    * Sur Android 10+, cette opération requiert d'être configuré comme l'application SMS par défaut.
+   * Remarque : marque également le message comme vu.
    * 
    * @param options.id - Identifiant unique du SMS à mettre à jour
    */
   markAsRead(options: { id: string }): Promise<void>;
 
   /**
+   * Marque un message SMS comme vu (définit le champ 'seen' à 1).
+   * Sur Android 10+, cette opération requiert d'être configuré comme l'application SMS par défaut.
+   * 
+   * @param options.id - Identifiant unique du SMS à mettre à jour
+   */
+  markAsSeen(options: { id: string }): Promise<void>;
+
+  /**
    * Supprime un SMS par son identifiant unique.
    * ⚠️ Cette méthode requiert obligatoirement d'être configuré comme l'application SMS par défaut.
    * 
    * @param options.id - Identifiant unique du SMS à supprimer
+   * @param options.force - Si true, déverrouille le message avant de le supprimer si nécessaire. Défaut : false.
    */
-  deleteSms(options: { id: string }): Promise<void>;
+  deleteSms(options: {
+    id: string;
+    force?: boolean;
+  }): Promise<{ deleted: boolean; reason?: 'locked' | 'not_found' }>;
+
+  /**
+   * Verrouille ou déverrouille un SMS par son identifiant unique.
+   * ⚠️ Cette méthode requiert obligatoirement d'être configuré comme l'application SMS par défaut.
+   *
+   * @param options.id - Identifiant unique du SMS à verrouiller/déverrouiller
+   * @param options.locked - true pour verrouiller, false pour déverrouiller
+   */
+  setSmsLocked(options: { id: string; locked: boolean }): Promise<void>;
 
   /**
    * Envoie un SMS.

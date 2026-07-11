@@ -847,6 +847,7 @@ class SmsVaultPlugin : Plugin() {
             val uri = Uri.withAppendedPath(Telephony.Sms.CONTENT_URI, id)
             val values = android.content.ContentValues().apply {
                 put(Telephony.Sms.READ, 1)
+                put(Telephony.Sms.SEEN, 1)
             }
             val rowsUpdated = context.contentResolver.update(uri, values, null, null)
             if (rowsUpdated > 0) {
@@ -861,7 +862,7 @@ class SmsVaultPlugin : Plugin() {
     }
 
     @PluginMethod
-    fun deleteSms(call: PluginCall) {
+    fun markAsSeen(call: PluginCall) {
         val id = call.getString("id")
         if (id == null) {
             call.reject("MISSING_PARAMETER", "Parameter 'id' is required")
@@ -870,9 +871,110 @@ class SmsVaultPlugin : Plugin() {
 
         try {
             val uri = Uri.withAppendedPath(Telephony.Sms.CONTENT_URI, id)
+            val values = android.content.ContentValues().apply {
+                put(Telephony.Sms.SEEN, 1)
+            }
+            val rowsUpdated = context.contentResolver.update(uri, values, null, null)
+            if (rowsUpdated > 0) {
+                call.resolve()
+            } else {
+                call.reject("UPDATE_FAILED", "No SMS found with ID $id or permission denied (must be default SMS app on Android 10+)")
+            }
+        } catch (e: Exception) {
+            Logger.error(TAG, "markAsSeen failed", e)
+            call.reject("WRITE_FAILED", "Failed to mark SMS as seen: ${e.message}", e)
+        }
+    }
+
+    @PluginMethod
+    fun setSmsLocked(call: PluginCall) {
+        val id = call.getString("id")
+        val locked = call.getBoolean("locked")
+        if (id == null || locked == null) {
+            call.reject("MISSING_PARAMETER", "Parameters 'id' and 'locked' are required")
+            return
+        }
+
+        try {
+            val uri = Uri.withAppendedPath(Telephony.Sms.CONTENT_URI, id)
+            val values = android.content.ContentValues().apply {
+                put(Telephony.Sms.LOCKED, if (locked) 1 else 0)
+            }
+            val rowsUpdated = context.contentResolver.update(uri, values, null, null)
+            if (rowsUpdated > 0) {
+                call.resolve()
+            } else {
+                call.reject("UPDATE_FAILED", "No SMS found with ID $id or permission denied (must be default SMS app on Android 10+)")
+            }
+        } catch (e: Exception) {
+            Logger.error(TAG, "setSmsLocked failed", e)
+            call.reject("WRITE_FAILED", "Failed to update SMS locked state: ${e.message}", e)
+        }
+    }
+
+    @PluginMethod
+    fun deleteSms(call: PluginCall) {
+        val id = call.getString("id")
+        if (id == null) {
+            call.reject("MISSING_PARAMETER", "Parameter 'id' is required")
+            return
+        }
+
+        val uri = Uri.withAppendedPath(Telephony.Sms.CONTENT_URI, id)
+        var isLocked = false
+        var exists = false
+        var cursor: Cursor? = null
+        try {
+            cursor = context.contentResolver.query(uri, arrayOf(Telephony.Sms.LOCKED), null, null, null)
+            if (cursor != null && cursor.moveToFirst()) {
+                exists = true
+                isLocked = cursor.getInt(0) == 1
+            }
+        } catch (e: Exception) {
+            // En cas d'erreur de lecture, on considère que le SMS n'est pas verrouillé
+            // et on tente la suppression directe (best effort)
+        } finally {
+            cursor?.close()
+        }
+
+        if (!exists) {
+            val result = JSObject().apply {
+                put("deleted", false)
+                put("reason", "not_found")
+            }
+            call.resolve(result)
+            return
+        }
+
+        val force = call.getBoolean("force") ?: false
+        if (isLocked && !force) {
+            val result = JSObject().apply {
+                put("deleted", false)
+                put("reason", "locked")
+            }
+            call.resolve(result)
+            return
+        }
+
+        if (isLocked && force) {
+            try {
+                val values = android.content.ContentValues().apply {
+                    put(Telephony.Sms.LOCKED, 0)
+                }
+                context.contentResolver.update(uri, values, null, null)
+            } catch (e: Exception) {
+                call.reject("DELETE_FAILED", "Failed to unlock SMS before deletion: ${e.message}", e)
+                return
+            }
+        }
+
+        try {
             val rowsDeleted = context.contentResolver.delete(uri, null, null)
             if (rowsDeleted > 0) {
-                call.resolve()
+                val result = JSObject().apply {
+                    put("deleted", true)
+                }
+                call.resolve(result)
             } else {
                 call.reject("DELETE_FAILED", "No SMS found with ID $id or permission denied (must be default SMS app on Android 10+)")
             }
@@ -949,7 +1051,13 @@ class SmsVaultPlugin : Plugin() {
                     Telephony.Sms.ADDRESS,
                     Telephony.Sms.BODY,
                     Telephony.Sms.DATE,
-                    Telephony.Sms.TYPE
+                    Telephony.Sms.TYPE,
+                    Telephony.Sms.SEEN,
+                    Telephony.Sms.STATUS,
+                    Telephony.Sms.ERROR_CODE,
+                    Telephony.Sms.LOCKED,
+                    Telephony.Sms.SERVICE_CENTER,
+                    "sub_id"
                 ),
                 "${Telephony.Sms.DATE} >= ?",
                 arrayOf(tenSecondsAgo.toString()),
@@ -962,6 +1070,13 @@ class SmsVaultPlugin : Plugin() {
                 val bodyIndex = c.getColumnIndexOrThrow(Telephony.Sms.BODY)
                 val dateIndex = c.getColumnIndexOrThrow(Telephony.Sms.DATE)
                 val typeIndex = c.getColumnIndexOrThrow(Telephony.Sms.TYPE)
+
+                val seenIdx = c.getColumnIndex(Telephony.Sms.SEEN)
+                val statusIdx = c.getColumnIndex(Telephony.Sms.STATUS)
+                val errorCodeIdx = c.getColumnIndex(Telephony.Sms.ERROR_CODE)
+                val lockedIdx = c.getColumnIndex(Telephony.Sms.LOCKED)
+                val serviceCenterIdx = c.getColumnIndex(Telephony.Sms.SERVICE_CENTER)
+                val subIdIndex = c.getColumnIndex("sub_id")
 
                 while (c.moveToNext()) {
                     val idVal = c.getString(idIndex) ?: ""
@@ -989,6 +1104,40 @@ class SmsVaultPlugin : Plugin() {
                         put("body", bodyVal)
                         put("date", dateVal)
                         put("type", typeVal)
+
+                        if (seenIdx != -1 && !c.isNull(seenIdx)) {
+                            put("seen", c.getInt(seenIdx) == 1)
+                        } else {
+                            put("seen", false)
+                        }
+
+                        if (statusIdx != -1 && !c.isNull(statusIdx)) {
+                            put("status", c.getInt(statusIdx))
+                        } else {
+                            put("status", -1) // SmsDeliveryStatus.NONE
+                        }
+
+                        if (errorCodeIdx != -1 && !c.isNull(errorCodeIdx)) {
+                            put("errorCode", c.getInt(errorCodeIdx))
+                        } else {
+                            put("errorCode", 0)
+                        }
+
+                        if (lockedIdx != -1 && !c.isNull(lockedIdx)) {
+                            put("locked", c.getInt(lockedIdx) == 1)
+                        } else {
+                            put("locked", false)
+                        }
+
+                        if (serviceCenterIdx != -1 && !c.isNull(serviceCenterIdx)) {
+                            put("serviceCenter", c.getString(serviceCenterIdx) ?: "")
+                        } else {
+                            put("serviceCenter", "")
+                        }
+
+                        if (subIdIndex != -1 && !c.isNull(subIdIndex)) {
+                            put("subscriptionId", c.getInt(subIdIndex))
+                        }
                     }
 
                     notifySmsReceived(smsObj)

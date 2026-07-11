@@ -84,7 +84,15 @@ export class SmsVaultWeb extends WebPlugin implements SmsVaultPlugin {
     throw this.unavailable('SmsVault is not available on web.');
   }
 
-  async deleteSms(_options: { id: string }): Promise<void> {
+  async markAsSeen(_options: { id: string }): Promise<void> {
+    throw this.unavailable('SmsVault is not available on web.');
+  }
+
+  async deleteSms(_options: { id: string; force?: boolean }): Promise<{ deleted: boolean; reason?: 'locked' | 'not_found' }> {
+    throw this.unavailable('SmsVault is not available on web.');
+  }
+
+  async setSmsLocked(_options: { id: string; locked: boolean }): Promise<void> {
     throw this.unavailable('SmsVault is not available on web.');
   }
 
