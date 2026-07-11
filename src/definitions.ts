@@ -50,6 +50,8 @@ export interface SmsMessage {
   creator?: string;
   /** Identifiant du contact associé à l'expéditeur */
   person?: string;
+  /** Identifiant d'abonnement SIM réceptrice (Android uniquement) */
+  subscriptionId?: number;
 }
 
 export interface PermissionStatus {
@@ -72,6 +74,17 @@ export interface SimCardInfo {
   simSlotIndex: number;
   /** Identifiant d'abonnement interne Android */
   subscriptionId: number;
+  /** Code pays mobile (Mobile Country Code) (ex: 208, 613) (Android uniquement) */
+  mcc?: string;
+  /** Code réseau mobile (Mobile Network Code) (ex: 01, 02) (Android uniquement) */
+  mnc?: string;
+}
+
+export interface SimProfile {
+  /** Indique si le périphérique possède plusieurs cartes SIM actives */
+  dualSim: boolean;
+  /** Liste des informations détaillées pour chaque carte SIM active */
+  sims: SimCardInfo[];
 }
 
 // ─────────────────────────────────────────────
@@ -250,6 +263,53 @@ export interface SmsVaultPlugin {
    * Requiert la permission 'phone' (READ_PHONE_STATE et READ_PHONE_NUMBERS).
    */
   getSimInfo(): Promise<{ simCards: SimCardInfo[] }>;
+
+  /**
+   * Récupère le profil détaillé des cartes SIM de l'appareil (état double SIM et liste).
+   * Requiert la permission 'phone'.
+   */
+  getDeviceSimProfile(): Promise<SimProfile>;
+
+  /**
+   * Démarre la surveillance des changements de cartes SIM sur l'appareil.
+   * Émet l'événement 'simsChanged' à chaque changement détecté.
+   * Requiert la permission 'phone'.
+   */
+  startMonitoringSimChanges(): Promise<void>;
+
+  /**
+   * Arrête la surveillance des changements de cartes SIM sur l'appareil.
+   */
+  stopMonitoringSimChanges(): Promise<void>;
+
+  /**
+   * Démarre l'écoute d'un message de validation via l'API SMS User Consent de Google.
+   * Affiche un pop-up système de consentement à la réception du SMS.
+   *
+   * @param options.senderAddress - Filtrer optionnellement par adresse d'expéditeur
+   */
+  startSmsUserConsent(options?: { senderAddress?: string }): Promise<void>;
+
+  /**
+   * Arrête l'écoute du consentement utilisateur.
+   */
+  stopSmsUserConsent(): Promise<void>;
+
+  /**
+   * Enregistre un listener pour les changements de cartes SIM.
+   */
+  addListener(
+    eventName: 'simsChanged',
+    listener: (profile: SimProfile) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Enregistre un listener pour la réception du message après consentement de l'utilisateur.
+   */
+  addListener(
+    eventName: 'smsUserConsentReceived',
+    listener: (data: { message: string }) => void,
+  ): Promise<PluginListenerHandle>;
 
   // ── Utilitaires ───────────────────────────────
 

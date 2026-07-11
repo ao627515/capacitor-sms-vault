@@ -41,6 +41,8 @@ class SmsReceiver : BroadcastReceiver() {
             return
         }
 
+        val subscriptionId = intent.getIntExtra("subscription", -1)
+
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
         if (messages.isNullOrEmpty()) {
             Logger.warn(TAG, "No messages found in SMS_RECEIVED intent")
@@ -56,9 +58,12 @@ class SmsReceiver : BroadcastReceiver() {
                     put("body", smsMessage.messageBody ?: "")
                     put("date", smsMessage.timestampMillis)
                     put("type", 1) // MessageType.INBOX = 1
+                    if (subscriptionId != -1) {
+                        put("subscriptionId", subscriptionId)
+                    }
                 }
                 plugin.notifySmsReceived(smsObj)
-                Logger.info(TAG, "SMS received from: ${smsMessage.displayOriginatingAddress}")
+                Logger.info(TAG, "SMS received from: ${smsMessage.displayOriginatingAddress} on subscription: $subscriptionId")
             } catch (e: Exception) {
                 Logger.error(TAG, "Failed to parse SMS PDU or notify listener", e)
                 // On continue avec les autres messages du même batch

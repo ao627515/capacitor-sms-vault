@@ -268,6 +268,13 @@ if (status.phone === 'granted') {
 * [`startSmsRetriever()`](#startsmsretriever)
 * [`addListener('otpReceived', ...)`](#addlistenerotpreceived-)
 * [`getSimInfo()`](#getsiminfo)
+* [`getDeviceSimProfile()`](#getdevicesimprofile)
+* [`startMonitoringSimChanges()`](#startmonitoringsimchanges)
+* [`stopMonitoringSimChanges()`](#stopmonitoringsimchanges)
+* [`startSmsUserConsent(...)`](#startsmsuserconsent)
+* [`stopSmsUserConsent()`](#stopsmsuserconsent)
+* [`addListener('simsChanged', ...)`](#addlistenersimschanged-)
+* [`addListener('smsUserConsentReceived', ...)`](#addlistenersmsuserconsentreceived-)
 * [`removeAllListeners()`](#removealllisteners)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
@@ -486,6 +493,107 @@ Requiert la permission 'phone' (READ_PHONE_STATE et READ_PHONE_NUMBERS).
 --------------------
 
 
+### getDeviceSimProfile()
+
+```typescript
+getDeviceSimProfile() => Promise<SimProfile>
+```
+
+Récupère le profil détaillé des cartes SIM de l'appareil (état double SIM et liste).
+Requiert la permission 'phone'.
+
+**Returns:** <code>Promise&lt;<a href="#simprofile">SimProfile</a>&gt;</code>
+
+--------------------
+
+
+### startMonitoringSimChanges()
+
+```typescript
+startMonitoringSimChanges() => Promise<void>
+```
+
+Démarre la surveillance des changements de cartes SIM sur l'appareil.
+Émet l'événement 'simsChanged' à chaque changement détecté.
+Requiert la permission 'phone'.
+
+--------------------
+
+
+### stopMonitoringSimChanges()
+
+```typescript
+stopMonitoringSimChanges() => Promise<void>
+```
+
+Arrête la surveillance des changements de cartes SIM sur l'appareil.
+
+--------------------
+
+
+### startSmsUserConsent(...)
+
+```typescript
+startSmsUserConsent(options?: { senderAddress?: string | undefined; } | undefined) => Promise<void>
+```
+
+Démarre l'écoute d'un message de validation via l'API SMS User Consent de Google.
+Affiche un pop-up système de consentement à la réception du SMS.
+
+| Param         | Type                                     |
+| ------------- | ---------------------------------------- |
+| **`options`** | <code>{ senderAddress?: string; }</code> |
+
+--------------------
+
+
+### stopSmsUserConsent()
+
+```typescript
+stopSmsUserConsent() => Promise<void>
+```
+
+Arrête l'écoute du consentement utilisateur.
+
+--------------------
+
+
+### addListener('simsChanged', ...)
+
+```typescript
+addListener(eventName: 'simsChanged', listener: (profile: SimProfile) => void) => Promise<PluginListenerHandle>
+```
+
+Enregistre un listener pour les changements de cartes SIM.
+
+| Param           | Type                                                                    |
+| --------------- | ----------------------------------------------------------------------- |
+| **`eventName`** | <code>'simsChanged'</code>                                              |
+| **`listener`**  | <code>(profile: <a href="#simprofile">SimProfile</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('smsUserConsentReceived', ...)
+
+```typescript
+addListener(eventName: 'smsUserConsentReceived', listener: (data: { message: string; }) => void) => Promise<PluginListenerHandle>
+```
+
+Enregistre un listener pour la réception du message après consentement de l'utilisateur.
+
+| Param           | Type                                                 |
+| --------------- | ---------------------------------------------------- |
+| **`eventName`** | <code>'smsUserConsentReceived'</code>                |
+| **`listener`**  | <code>(data: { message: string; }) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
 ### removeAllListeners()
 
 ```typescript
@@ -511,18 +619,19 @@ Supprime tous les listeners enregistrés sur ce plugin.
 
 #### SmsMessage
 
-| Prop           | Type                                                | Description                                                               |
-| -------------- | --------------------------------------------------- | ------------------------------------------------------------------------- |
-| **`id`**       | <code>string</code>                                 | Identifiant unique du SMS (depuis la base ContentProvider)                |
-| **`threadId`** | <code>string</code>                                 | Identifiant du fil de conversation                                        |
-| **`address`**  | <code>string</code>                                 | Numéro ou nom de l'expéditeur                                             |
-| **`body`**     | <code>string</code>                                 | Contenu brut du SMS                                                       |
-| **`subject`**  | <code>string</code>                                 | Sujet du message (MMS ou opérateurs spécifiques)                          |
-| **`date`**     | <code>number</code>                                 | Timestamp local en millisecondes (date de réception/envoi sur l'appareil) |
-| **`dateSent`** | <code>number</code>                                 | Timestamp réseau en millisecondes (date d'envoi côté opérateur)           |
-| **`type`**     | <code><a href="#messagetype">MessageType</a></code> | Type de message selon <a href="#messagetype">MessageType</a>              |
-| **`creator`**  | <code>string</code>                                 | Package de l'application ayant créé le SMS                                |
-| **`person`**   | <code>string</code>                                 | Identifiant du contact associé à l'expéditeur                             |
+| Prop                 | Type                                                | Description                                                               |
+| -------------------- | --------------------------------------------------- | ------------------------------------------------------------------------- |
+| **`id`**             | <code>string</code>                                 | Identifiant unique du SMS (depuis la base ContentProvider)                |
+| **`threadId`**       | <code>string</code>                                 | Identifiant du fil de conversation                                        |
+| **`address`**        | <code>string</code>                                 | Numéro ou nom de l'expéditeur                                             |
+| **`body`**           | <code>string</code>                                 | Contenu brut du SMS                                                       |
+| **`subject`**        | <code>string</code>                                 | Sujet du message (MMS ou opérateurs spécifiques)                          |
+| **`date`**           | <code>number</code>                                 | Timestamp local en millisecondes (date de réception/envoi sur l'appareil) |
+| **`dateSent`**       | <code>number</code>                                 | Timestamp réseau en millisecondes (date d'envoi côté opérateur)           |
+| **`type`**           | <code><a href="#messagetype">MessageType</a></code> | Type de message selon <a href="#messagetype">MessageType</a>              |
+| **`creator`**        | <code>string</code>                                 | Package de l'application ayant créé le SMS                                |
+| **`person`**         | <code>string</code>                                 | Identifiant du contact associé à l'expéditeur                             |
+| **`subscriptionId`** | <code>number</code>                                 | Identifiant d'abonnement SIM réceptrice (Android uniquement)              |
 
 
 #### SmsFilter
@@ -573,13 +682,23 @@ Par défaut toutes les colonnes obligatoires sont retournées.
 
 #### SimCardInfo
 
-| Prop                 | Type                | Description                                                     |
-| -------------------- | ------------------- | --------------------------------------------------------------- |
-| **`carrierName`**    | <code>string</code> | Nom de l'opérateur (ex: Orange, SFR)                            |
-| **`countryIso`**     | <code>string</code> | Code pays ISO à 2 lettres (ex: fr)                              |
-| **`phoneNumber`**    | <code>string</code> | Numéro de téléphone de la ligne si provisionné (peut être vide) |
-| **`simSlotIndex`**   | <code>number</code> | Index du slot SIM physique (0, 1, etc.)                         |
-| **`subscriptionId`** | <code>number</code> | Identifiant d'abonnement interne Android                        |
+| Prop                 | Type                | Description                                                                |
+| -------------------- | ------------------- | -------------------------------------------------------------------------- |
+| **`carrierName`**    | <code>string</code> | Nom de l'opérateur (ex: Orange, SFR)                                       |
+| **`countryIso`**     | <code>string</code> | Code pays ISO à 2 lettres (ex: fr)                                         |
+| **`phoneNumber`**    | <code>string</code> | Numéro de téléphone de la ligne si provisionné (peut être vide)            |
+| **`simSlotIndex`**   | <code>number</code> | Index du slot SIM physique (0, 1, etc.)                                    |
+| **`subscriptionId`** | <code>number</code> | Identifiant d'abonnement interne Android                                   |
+| **`mcc`**            | <code>string</code> | Code pays mobile (Mobile Country Code) (ex: 208, 613) (Android uniquement) |
+| **`mnc`**            | <code>string</code> | Code réseau mobile (Mobile Network Code) (ex: 01, 02) (Android uniquement) |
+
+
+#### SimProfile
+
+| Prop          | Type                       | Description                                                     |
+| ------------- | -------------------------- | --------------------------------------------------------------- |
+| **`dualSim`** | <code>boolean</code>       | Indique si le périphérique possède plusieurs cartes SIM actives |
+| **`sims`**    | <code>SimCardInfo[]</code> | Liste des informations détaillées pour chaque carte SIM active  |
 
 
 ### Type Aliases

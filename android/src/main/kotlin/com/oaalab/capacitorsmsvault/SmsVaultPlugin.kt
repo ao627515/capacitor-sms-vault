@@ -2,6 +2,8 @@ package com.oaalab.capacitorsmsvault
 
 import android.Manifest
 import android.content.Context
+import android.content.BroadcastReceiver
+import android.content.Intent
 import android.content.IntentFilter
 import android.database.ContentObserver
 import android.database.Cursor
@@ -22,6 +24,9 @@ import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
+import com.google.android.gms.auth.api.phone.SmsRetriever
+import com.google.android.gms.common.api.CommonStatusCodes
+import com.google.android.gms.common.api.Status
 import java.lang.ref.WeakReference
 
 /**
@@ -75,6 +80,9 @@ class SmsVaultPlugin : Plugin() {
     private val recentSmsFingerprints = BoundedSet<String>(100)
 
     private var smsContentObserver: SmsContentObserver? = null
+    private var simSubscriptionsListener: SubscriptionManager.OnSubscriptionsChangedListener? = null
+    private var userConsentCall: PluginCall? = null
+    private var userConsentReceiver: BroadcastReceiver? = null
 
     // ─── Lifecycle ───────────────────────────────────────────────────────────
 
@@ -122,7 +130,29 @@ class SmsVaultPlugin : Plugin() {
             Logger.info(TAG, "SmsReceiver and SmsContentObserver unregistered on destroy")
         }
         smsRetrieverHelper?.stop()
+        simSubscriptionsListener?.let { listener ->
+            try {
+                val subscriptionManager = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
+                subscriptionManager.removeOnSubscriptionsChangedListener(listener)
+            } catch (e: Exception) {
+                // Ignore
+            }
+            simSubscriptionsListener = null
+        }
+        cleanupUserConsent()
         super.handleOnDestroy()
+    }
+
+    private fun cleanupUserConsent() {
+        userConsentReceiver?.let { receiver ->
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (e: Exception) {
+                // Ignore
+            }
+            userConsentReceiver = null
+        }
+        userConsentCall = null
     }
 
     // ─── Gestion des permissions ─────────────────────────────────────────────
@@ -457,6 +487,22 @@ class SmsVaultPlugin : Plugin() {
                     simInfo.put("simSlotIndex", subInfo.simSlotIndex)
                     simInfo.put("subscriptionId", subInfo.subscriptionId)
 
+                    val mcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        subInfo.mccString ?: ""
+                    } else {
+                        @Suppress("DEPRECATION")
+                        if (subInfo.mcc != 0) subInfo.mcc.toString() else ""
+                    }
+                    simInfo.put("mcc", mcc)
+
+                    val mnc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        subInfo.mncString ?: ""
+                    } else {
+                        @Suppress("DEPRECATION")
+                        if (subInfo.mnc != 0) subInfo.mnc.toString() else ""
+                    }
+                    simInfo.put("mnc", mnc)
+
                     val number = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         try {
                             subscriptionManager.getPhoneNumber(subInfo.subscriptionId) ?: ""
@@ -464,6 +510,7 @@ class SmsVaultPlugin : Plugin() {
                             subInfo.number ?: ""
                         }
                     } else {
+                        @Suppress("DEPRECATION")
                         subInfo.number ?: ""
                     }
                     simInfo.put("phoneNumber", number)
@@ -479,6 +526,260 @@ class SmsVaultPlugin : Plugin() {
             Logger.error(TAG, "getSimInfo failed", e)
             call.reject("SIM_INFO_FAILED", "Failed to get SIM info: ${e.message}", e)
         }
+    }
+
+    /**
+     * Récupère le profil SIM détaillé contenant le statut dualSim et la liste des cartes actives.
+     */
+    @PluginMethod
+    fun getDeviceSimProfile(call: PluginCall) {
+        if (getPermissionState("phone") != PermissionState.GRANTED) {
+            call.reject("PERMISSION_DENIED", "READ_PHONE_STATE / READ_PHONE_NUMBERS permissions are required to access SIM profile")
+            return
+        }
+
+        try {
+            val profile = buildSimProfile()
+            call.resolve(profile)
+        } catch (e: Exception) {
+            Logger.error(TAG, "getDeviceSimProfile failed", e)
+            call.reject("SIM_PROFILE_FAILED", "Failed to get SIM profile: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Démarre la surveillance des changements de cartes SIM sur le périphérique.
+     */
+    @PluginMethod
+    fun startMonitoringSimChanges(call: PluginCall) {
+        if (getPermissionState("phone") != PermissionState.GRANTED) {
+            call.reject("PERMISSION_DENIED", "READ_PHONE_STATE / READ_PHONE_NUMBERS permissions are required to monitor SIM changes")
+            return
+        }
+
+        if (simSubscriptionsListener != null) {
+            Logger.info(TAG, "SIM monitoring already started")
+            call.resolve()
+            return
+        }
+
+        try {
+            val subscriptionManager = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
+            val listener = object : SubscriptionManager.OnSubscriptionsChangedListener() {
+                override fun onSubscriptionsChanged() {
+                    Logger.info(TAG, "SIM subscriptions changed detected")
+                    val profile = buildSimProfile()
+                    notifyListeners("simsChanged", profile)
+                }
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                subscriptionManager.addOnSubscriptionsChangedListener(context.mainExecutor, listener)
+            } else {
+                @Suppress("DEPRECATION")
+                subscriptionManager.addOnSubscriptionsChangedListener(listener)
+            }
+
+            simSubscriptionsListener = listener
+            Logger.info(TAG, "SIM monitoring started")
+            call.resolve()
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to start monitoring SIM changes", e)
+            call.reject("MONITOR_START_FAILED", "Failed to start SIM monitoring: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Arrête la surveillance des changements de cartes SIM sur le périphérique.
+     */
+    @PluginMethod
+    fun stopMonitoringSimChanges(call: PluginCall) {
+        val listener = simSubscriptionsListener
+        if (listener == null) {
+            Logger.info(TAG, "SIM monitoring was not active")
+            call.resolve()
+            return
+        }
+
+        try {
+            val subscriptionManager = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
+            subscriptionManager.removeOnSubscriptionsChangedListener(listener)
+            simSubscriptionsListener = null
+            Logger.info(TAG, "SIM monitoring stopped")
+            call.resolve()
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to stop monitoring SIM changes", e)
+            call.reject("MONITOR_STOP_FAILED", "Failed to stop SIM monitoring: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Helper pour construire le profil SIM complet.
+     */
+    @Suppress("DEPRECATION")
+    private fun buildSimProfile(): JSObject {
+        val simProfile = JSObject()
+        val simsList = JSArray()
+        var dualSim = false
+
+        try {
+            val subscriptionManager = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
+            val activeSubscriptions = subscriptionManager.activeSubscriptionInfoList
+            if (activeSubscriptions != null) {
+                dualSim = activeSubscriptions.size > 1
+                for (subInfo in activeSubscriptions) {
+                    val simInfo = JSObject().apply {
+                        put("carrierName", subInfo.carrierName?.toString() ?: "")
+                        put("countryIso", subInfo.countryIso?.toString() ?: "")
+                        put("simSlotIndex", subInfo.simSlotIndex)
+                        put("subscriptionId", subInfo.subscriptionId)
+
+                        val mcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            subInfo.mccString ?: ""
+                        } else {
+                            @Suppress("DEPRECATION")
+                            if (subInfo.mcc != 0) subInfo.mcc.toString() else ""
+                        }
+                        put("mcc", mcc)
+
+                        val mnc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            subInfo.mncString ?: ""
+                        } else {
+                            @Suppress("DEPRECATION")
+                            if (subInfo.mnc != 0) subInfo.mnc.toString() else ""
+                        }
+                        put("mnc", mnc)
+
+                        val number = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            try {
+                                subscriptionManager.getPhoneNumber(subInfo.subscriptionId) ?: ""
+                            } catch (e: SecurityException) {
+                                subInfo.number ?: ""
+                            }
+                        } else {
+                            subInfo.number ?: ""
+                        }
+                        put("phoneNumber", number)
+                    }
+                    simsList.put(simInfo)
+                }
+            }
+        } catch (e: SecurityException) {
+            Logger.error(TAG, "SecurityException building SIM profile", e)
+        } catch (e: Exception) {
+            Logger.error(TAG, "Error building SIM profile", e)
+        }
+
+        simProfile.put("dualSim", dualSim)
+        simProfile.put("sims", simsList)
+        return simProfile
+    }
+
+    /**
+     * Démarre l'écoute d'un message OTP via l'API SMS User Consent de Google.
+     */
+    @PluginMethod
+    fun startSmsUserConsent(call: PluginCall) {
+        cleanupUserConsent()
+        userConsentCall = call
+
+        val senderAddress = call.getString("senderAddress")
+
+        try {
+            val client = SmsRetriever.getClient(context)
+            val task = client.startSmsUserConsent(senderAddress)
+
+            task.addOnSuccessListener {
+                Logger.info(TAG, "SMS User Consent client started successfully")
+                registerUserConsentReceiver()
+            }
+            task.addOnFailureListener { e ->
+                Logger.error(TAG, "Failed to start SMS User Consent client", e)
+                call.reject("USER_CONSENT_START_FAILED", "Failed to start SMS User Consent client: ${e.message}", e)
+                userConsentCall = null
+            }
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to initialize SMS User Consent", e)
+            call.reject("USER_CONSENT_INIT_FAILED", "Failed to initialize SMS User Consent: ${e.message}", e)
+            userConsentCall = null
+        }
+    }
+
+    /**
+     * Arrête l'écoute du consentement utilisateur.
+     */
+    @PluginMethod
+    fun stopSmsUserConsent(call: PluginCall) {
+        cleanupUserConsent()
+        Logger.info(TAG, "SMS User Consent stopped manually")
+        call.resolve()
+    }
+
+    /**
+     * Enregistre le BroadcastReceiver pour intercepter le signal de consentement.
+     */
+    private fun registerUserConsentReceiver() {
+        val filter = IntentFilter(SmsRetriever.SMS_RETRIEVED_ACTION)
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == SmsRetriever.SMS_RETRIEVED_ACTION) {
+                    val extras = intent.extras
+                    val status = extras?.let {
+                        androidx.core.os.BundleCompat.getParcelable(it, SmsRetriever.EXTRA_STATUS, Status::class.java)
+                    }
+
+                    when (status?.statusCode) {
+                        CommonStatusCodes.SUCCESS -> {
+                            val consentIntent = extras?.let {
+                                androidx.core.os.BundleCompat.getParcelable(it, SmsRetriever.EXTRA_CONSENT_INTENT, Intent::class.java)
+                            }
+                            val call = userConsentCall
+                            if (consentIntent != null && call != null) {
+                                startActivityForResult(call, consentIntent, "userConsentCallback")
+                            } else {
+                                userConsentCall?.reject("CONSENT_INTENT_NULL", "Consent intent is null or plugin call was lost")
+                                cleanupUserConsent()
+                            }
+                        }
+                        CommonStatusCodes.TIMEOUT -> {
+                            Logger.info(TAG, "SMS User Consent timed out")
+                            userConsentCall?.reject("TIMEOUT", "SMS User Consent timed out after 5 minutes")
+                            cleanupUserConsent()
+                        }
+                    }
+                }
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.registerReceiver(receiver, filter)
+        }
+        userConsentReceiver = receiver
+    }
+
+    /**
+     * Callback déclenché après la décision de l'utilisateur sur la boîte de dialogue de consentement.
+     */
+    @ActivityCallback
+    private fun userConsentCallback(call: PluginCall, result: androidx.activity.result.ActivityResult) {
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val message = result.data?.getStringExtra(SmsRetriever.EXTRA_SMS_MESSAGE)
+            if (message != null) {
+                val data = JSObject().apply {
+                    put("message", message)
+                }
+                notifyListeners("smsUserConsentReceived", data)
+                call.resolve()
+            } else {
+                call.reject("NO_MESSAGE", "No SMS message received in user consent result")
+            }
+        } else {
+            call.reject("CONSENT_DENIED", "User denied consent to read SMS")
+        }
+        cleanupUserConsent()
     }
 
     // ─── Classes internes utilitaires ────────────────────────────────────────

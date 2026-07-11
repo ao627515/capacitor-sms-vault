@@ -592,6 +592,28 @@
           </div>
         </div>
 
+        <div class="card">
+          <div class="card-header">📡 Profil SIM &amp; Changements</div>
+          <div class="card-body">
+            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+              Récupère le profil SIM complet (dual SIM et codes MCC/MNC) ou surveille les changements à chaud.
+            </p>
+            <div style="display:flex;gap:8px;margin-bottom:10px">
+              <button class="btn btn-ghost" id="btnGetSimProfile" style="flex:1">
+                📋 getDeviceSimProfile()
+              </button>
+              <button class="btn btn-outline" id="btnToggleSimMonitor" style="flex:1">
+                ▶ Monitor SIM
+              </button>
+            </div>
+            <div class="live-indicator" id="simMonitorIndicator" style="display:none;margin-bottom:10px">
+              <div class="live-dot" id="simMonitorDot"></div>
+              <span class="live-status" id="simMonitorStatus">Surveillance inactive</span>
+            </div>
+            <div id="simProfileResult" style="margin-top: 10px; font-size: 0.85rem;"></div>
+          </div>
+        </div>
+
         <!-- Note Sideload / Restricted Settings -->
         <div class="card" style="border-color: var(--yellow);">
           <div class="card-header" style="color: var(--yellow); border-bottom-color: var(--border);">
@@ -738,6 +760,34 @@
             <button class="btn btn-primary" id="btnStartOtp">
               ▶ startSmsRetriever()
             </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">🙋‍♂️ SMS User Consent API</div>
+          <div class="card-body">
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+              Cette API capte un SMS OTP de n'importe quel expéditeur en affichant un dialogue système natif de consentement.
+            </p>
+
+            <div class="live-indicator" id="consentIndicator">
+              <div class="live-dot" id="consentDot"></div>
+              <span class="live-status" id="consentStatus">Inactif (Attente de démarrage)</span>
+            </div>
+
+            <div class="field" style="margin-bottom:10px">
+              <label class="field-label" for="consentSenderAddress">Adresse expéditeur (Optionnel)</label>
+              <input type="text" id="consentSenderAddress" class="field-input" placeholder="ex: 38600 ou laisser vide..." />
+            </div>
+
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary" id="btnStartConsent" style="flex:2">
+                ▶ startSmsUserConsent()
+              </button>
+              <button class="btn btn-danger" id="btnStopConsent" style="flex:1;display:none">
+                ⏹ Stop
+              </button>
+            </div>
           </div>
         </div>
 

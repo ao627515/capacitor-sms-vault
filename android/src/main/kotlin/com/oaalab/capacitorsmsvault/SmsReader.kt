@@ -31,7 +31,8 @@ class SmsReader(private val context: Context) {
             Telephony.Sms.ADDRESS,
             Telephony.Sms.BODY,
             Telephony.Sms.DATE,
-            Telephony.Sms.TYPE
+            Telephony.Sms.TYPE,
+            "sub_id"
         )
 
         val hasThreadId = projectionObj?.getBoolean("threadId") == true
@@ -94,6 +95,7 @@ class SmsReader(private val context: Context) {
                 val bodyIndex = c.getColumnIndexOrThrow(Telephony.Sms.BODY)
                 val dateIndex = c.getColumnIndexOrThrow(Telephony.Sms.DATE)
                 val typeIndex = c.getColumnIndexOrThrow(Telephony.Sms.TYPE)
+                val subIdIndex = c.getColumnIndex("sub_id")
 
                 val threadIdIdx = if (hasThreadId) c.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID) else -1
                 val subjectIdx = if (hasSubject) c.getColumnIndexOrThrow(Telephony.Sms.SUBJECT) else -1
@@ -127,6 +129,10 @@ class SmsReader(private val context: Context) {
                                 put("body", bodyVal)
                                 put("date", c.getLong(dateIndex))
                                 put("type", c.getInt(typeIndex))
+
+                                if (subIdIndex != -1 && !c.isNull(subIdIndex)) {
+                                    put("subscriptionId", c.getInt(subIdIndex))
+                                }
 
                                 if (hasThreadId && threadIdIdx != -1) put("threadId", c.getString(threadIdIdx) ?: "")
                                 if (hasSubject && subjectIdx != -1) put("subject", c.getString(subjectIdx) ?: "")

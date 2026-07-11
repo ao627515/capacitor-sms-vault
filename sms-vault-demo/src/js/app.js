@@ -232,6 +232,112 @@ document.getElementById('btnGetSimInfo').addEventListener('click', async () => {
   }
 });
 
+// getDeviceSimProfile
+document.getElementById('btnGetSimProfile').addEventListener('click', async () => {
+  const resultDiv = document.getElementById('simProfileResult');
+  resultDiv.innerHTML = '<span class="spinner"></span> Chargement…';
+  try {
+    const profile = await SmsVault.getDeviceSimProfile();
+    addLog('📋', 'getDeviceSimProfile', {}, `dualSim: ${profile.dualSim}, ${profile.sims.length} SIMs`);
+    
+    if (profile.sims.length === 0) {
+      resultDiv.innerHTML = '<div style="color: var(--yellow)">Aucun profil SIM actif détecté.</div>';
+      return;
+    }
+
+    resultDiv.innerHTML = `
+      <div style="margin-bottom: 8px; font-weight: bold; color: var(--green);">
+        Dual SIM : ${profile.dualSim ? 'Oui' : 'Non'}
+      </div>
+    ` + profile.sims.map(sim => `
+      <div style="background: var(--surface2); border: 1px solid var(--border); padding: 8px; border-radius: var(--radius-sm); margin-bottom: 6px; text-align: left;">
+        <strong>Opérateur :</strong> ${escapeHtml(sim.carrierName)}<br>
+        <strong>Pays :</strong> ${escapeHtml(sim.countryIso).toUpperCase()}<br>
+        <strong>MCC / MNC :</strong> ${sim.mcc ? sim.mcc : '?'}/${sim.mnc ? sim.mnc : '?'}<br>
+        <strong>Slot :</strong> ${sim.simSlotIndex}<br>
+        <strong>ID Abonnement :</strong> ${sim.subscriptionId}<br>
+        <strong>Numéro :</strong> ${sim.phoneNumber ? escapeHtml(sim.phoneNumber) : '<span style="color: var(--text-dim); font-style: italic;">non disponible</span>'}
+      </div>
+    `).join('');
+  } catch (e) {
+    addLog('📋', 'getDeviceSimProfile', {}, e.message, 'err');
+    resultDiv.innerHTML = `<div style="color: var(--red)">Erreur: ${escapeHtml(e.message)}</div>`;
+    toast(e.message, 'error');
+  }
+});
+
+// SIM Monitor
+let simMonitorListener = null;
+let isSimMonitoring = false;
+
+function updateSimMonitorUI(active) {
+  isSimMonitoring = active;
+  const indicator = document.getElementById('simMonitorIndicator');
+  const status = document.getElementById('simMonitorStatus');
+  const dot = document.getElementById('simMonitorDot');
+  const btn = document.getElementById('btnToggleSimMonitor');
+
+  if (active) {
+    indicator.style.display = 'flex';
+    dot.classList.add('active');
+    status.textContent = 'Surveillance active (écoute changement SIM)…';
+    status.style.color = 'var(--green)';
+    btn.className = 'btn btn-danger';
+    btn.textContent = '⏹ Stop Monitoring';
+  } else {
+    indicator.style.display = 'none';
+    dot.classList.remove('active');
+    status.textContent = 'Surveillance inactive';
+    status.style.color = '';
+    btn.className = 'btn btn-outline';
+    btn.textContent = '▶ Monitor SIM';
+  }
+}
+
+document.getElementById('btnToggleSimMonitor').addEventListener('click', async () => {
+  try {
+    if (!isSimMonitoring) {
+      simMonitorListener = await SmsVault.addListener('simsChanged', (profile) => {
+        addLog('📡', 'event:simsChanged', {}, `dualSim: ${profile.dualSim}, sims: ${profile.sims.length}`, 'event');
+        toast('Changement de carte SIM détecté !', 'info');
+        
+        // Rafraîchir l'affichage
+        const resultDiv = document.getElementById('simProfileResult');
+        resultDiv.innerHTML = `
+          <div style="margin-bottom: 8px; font-weight: bold; color: var(--green);">
+            Dual SIM : ${profile.dualSim ? 'Oui' : 'Non'} (Mis à jour à ${timestamp()})
+          </div>
+        ` + profile.sims.map(sim => `
+          <div style="background: var(--surface2); border: 1px solid var(--border); padding: 8px; border-radius: var(--radius-sm); margin-bottom: 6px; text-align: left;">
+            <strong>Opérateur :</strong> ${escapeHtml(sim.carrierName)}<br>
+            <strong>Pays :</strong> ${escapeHtml(sim.countryIso).toUpperCase()}<br>
+            <strong>MCC / MNC :</strong> ${sim.mcc}/${sim.mnc}<br>
+            <strong>Slot :</strong> ${sim.simSlotIndex}<br>
+            <strong>ID Abonnement :</strong> ${sim.subscriptionId}<br>
+          </div>
+        `).join('');
+      });
+      
+      await SmsVault.startMonitoringSimChanges();
+      addLog('▶', 'startMonitoringSimChanges', {}, 'OK');
+      updateSimMonitorUI(true);
+      toast('Surveillance SIM démarrée', 'success');
+    } else {
+      await SmsVault.stopMonitoringSimChanges();
+      if (simMonitorListener) {
+        await simMonitorListener.remove();
+        simMonitorListener = null;
+      }
+      addLog('⏹', 'stopMonitoringSimChanges', {}, 'OK');
+      updateSimMonitorUI(false);
+      toast('Surveillance SIM arrêtée', 'info');
+    }
+  } catch (e) {
+    addLog('📡', 'MonitoringSIM', {}, e.message, 'err');
+    toast(e.message, 'error');
+  }
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB 2 — SMS LIST
 // ══════════════════════════════════════════════════════════════════════════════
@@ -554,6 +660,88 @@ btnStartOtp.addEventListener('click', async () => {
   } catch (e) {
     updateOtpUI(false);
     addLog('▶', 'startSmsRetriever', {}, e.message, 'err');
+    toast(e.message, 'error');
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB — SMS USER CONSENT
+// ══════════════════════════════════════════════════════════════════════════════
+
+let consentListener = null;
+let isConsentListening = false;
+
+const btnStartConsent = document.getElementById('btnStartConsent');
+const btnStopConsent = document.getElementById('btnStopConsent');
+const consentDot = document.getElementById('consentDot');
+const consentStatus = document.getElementById('consentStatus');
+const consentSenderAddress = document.getElementById('consentSenderAddress');
+
+function updateConsentUI(listening) {
+  isConsentListening = listening;
+  if (listening) {
+    consentDot.classList.add('active');
+    consentStatus.textContent = 'Écoute active (attente SMS OTP)…';
+    consentStatus.style.color = 'var(--green)';
+    btnStartConsent.disabled = true;
+    btnStartConsent.innerHTML = '<span class="spinner"></span> En attente…';
+    btnStopConsent.style.display = 'block';
+  } else {
+    consentDot.classList.remove('active');
+    consentStatus.textContent = 'Inactif (Attente de démarrage)';
+    consentStatus.style.color = '';
+    btnStartConsent.disabled = false;
+    btnStartConsent.innerHTML = '▶ startSmsUserConsent()';
+    btnStopConsent.style.display = 'none';
+  }
+}
+
+btnStartConsent.addEventListener('click', async () => {
+  const senderAddress = consentSenderAddress.value.trim() || null;
+  const options = senderAddress ? { senderAddress } : {};
+
+  try {
+    updateConsentUI(true);
+
+    if (consentListener) {
+      await consentListener.remove();
+      consentListener = null;
+    }
+
+    consentListener = await SmsVault.addListener('smsUserConsentReceived', (data) => {
+      addLog('🙋‍♂️', 'event:smsUserConsentReceived', {}, data.message, 'event');
+      updateOtpUI(false, data.message); // Affiche le message dans la zone d'affichage commune OTP
+      toast('Message reçu via Consentement !', 'success');
+      updateConsentUI(false);
+      
+      if (consentListener) {
+        consentListener.remove();
+        consentListener = null;
+      }
+    });
+
+    await SmsVault.startSmsUserConsent(options);
+    addLog('▶', 'startSmsUserConsent', options, 'OK');
+    toast('Écouteur SMS User Consent démarré', 'success');
+  } catch (e) {
+    updateConsentUI(false);
+    addLog('▶', 'startSmsUserConsent', options, e.message, 'err');
+    toast(e.message, 'error');
+  }
+});
+
+btnStopConsent.addEventListener('click', async () => {
+  try {
+    await SmsVault.stopSmsUserConsent();
+    if (consentListener) {
+      await consentListener.remove();
+      consentListener = null;
+    }
+    addLog('⏹', 'stopSmsUserConsent', {}, 'OK');
+    updateConsentUI(false);
+    toast('Écouteur SMS User Consent arrêté', 'info');
+  } catch (e) {
+    addLog('⏹', 'stopSmsUserConsent', {}, e.message, 'err');
     toast(e.message, 'error');
   }
 });

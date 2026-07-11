@@ -3,6 +3,7 @@ import { WebPlugin } from '@capacitor/core';
 import type {
   PermissionStatus,
   SimCardInfo,
+  SimProfile,
   SmsFilter,
   SmsMessage,
   SmsProjection,
@@ -56,6 +57,26 @@ export class SmsVaultWeb extends WebPlugin implements SmsVaultPlugin {
   }
 
   async getSimInfo(): Promise<{ simCards: SimCardInfo[] }> {
+    throw this.unavailable('SmsVault is not available on web.');
+  }
+
+  async getDeviceSimProfile(): Promise<SimProfile> {
+    throw this.unavailable('SmsVault is not available on web.');
+  }
+
+  async startMonitoringSimChanges(): Promise<void> {
+    throw this.unavailable('SmsVault is not available on web.');
+  }
+
+  async stopMonitoringSimChanges(): Promise<void> {
+    throw this.unavailable('SmsVault is not available on web.');
+  }
+
+  async startSmsUserConsent(_options?: { senderAddress?: string }): Promise<void> {
+    throw this.unavailable('SmsVault is not available on web.');
+  }
+
+  async stopSmsUserConsent(): Promise<void> {
     throw this.unavailable('SmsVault is not available on web.');
   }
 }
