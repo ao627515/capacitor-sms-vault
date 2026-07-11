@@ -233,6 +233,66 @@ if (status.phone === 'granted') {
 }
 ```
 
+### Détecter les codes de validation avec SMS User Consent
+
+Contrairement à la SMS Retriever API, la SMS User Consent API ne requiert pas de format de message particulier ni de clé de hachage de l'application dans le SMS, mais elle demande un consentement explicite de l'utilisateur via une boîte de dialogue système lorsqu'un SMS est reçu.
+
+```typescript
+// 1. Enregistrer le listener pour le consentement
+const handle = await SmsVault.addListener('smsUserConsentReceived', (data) => {
+  console.log('Message reçu après consentement :', data.message);
+  
+  // Extraire le code OTP (ex: regex)
+  const otpCode = data.message.match(/\d{4,10}/)?.[0];
+  console.log('OTP :', otpCode);
+  
+  handle.remove();
+});
+
+// 2. Démarrer l'écoute (valide max 5 minutes)
+// Spécifiez facultativement le numéro de l'expéditeur attendu pour restreindre le popup
+await SmsVault.startSmsUserConsent({ senderAddress: '+22670000000' });
+```
+
+### Modifier ou Supprimer des SMS
+
+> ⚠️ **Important (Android 4.4+)** : La suppression de messages ou le marquage comme lu nécessite que votre application soit configurée comme l'**application SMS par défaut** sur l'appareil.
+
+```typescript
+// Marquer un SMS comme lu
+await SmsVault.markAsRead({ id: '123' });
+console.log('Le message 123 a été marqué comme lu');
+
+// Supprimer un SMS
+await SmsVault.deleteSms({ id: '123' });
+console.log('Le message 123 a été supprimé');
+```
+
+### Envoyer des SMS (Direct ou Indirect)
+
+Vous pouvez envoyer des SMS de deux manières :
+1. **Mode direct** : Envoi immédiat en arrière-plan. Requiert la permission `sendSms` (`android.permission.SEND_SMS`).
+2. **Mode indirect** : Ouvre l'application de messagerie par défaut pré-remplie avec le numéro et le message. Aucune permission requise.
+
+```typescript
+// Mode Direct (avec permission)
+const status = await SmsVault.requestPermissions();
+if (status.sendSms === 'granted') {
+  await SmsVault.sendSms({
+    phoneNumber: '+33612345678',
+    message: 'Bonjour, ceci est un SMS direct.',
+    mode: 'direct'
+  });
+}
+
+// Mode Indirect (sans permission, ouvre l'UI système)
+await SmsVault.sendSms({
+  phoneNumber: '+33612345678',
+  message: 'Bonjour, ceci est un SMS pré-rempli.',
+  mode: 'indirect'
+});
+```
+
 ## Conformité Google Play
 
 > ⚠️ **Important** : Les permissions `READ_SMS` et `RECEIVE_SMS` font partie des permissions sensibles soumises à une procédure de validation par Google.
@@ -275,6 +335,9 @@ if (status.phone === 'granted') {
 * [`stopSmsUserConsent()`](#stopsmsuserconsent)
 * [`addListener('simsChanged', ...)`](#addlistenersimschanged-)
 * [`addListener('smsUserConsentReceived', ...)`](#addlistenersmsuserconsentreceived-)
+* [`markAsRead(...)`](#markasread)
+* [`deleteSms(...)`](#deletesms)
+* [`sendSms(...)`](#sendsms)
 * [`removeAllListeners()`](#removealllisteners)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
@@ -458,6 +521,8 @@ Démarre la détection d'OTP via la SMS Retriever API.
 L'API attend la réception d'un unique message de format spécifique avec la clé de hachage de l'application.
 Ne requiert aucune permission SMS sensible.
 
+⚠️ L'écoute expire automatiquement après 5 minutes. Passé ce délai, relancez la méthode si nécessaire.
+
 --------------------
 
 
@@ -540,6 +605,8 @@ startSmsUserConsent(options?: { senderAddress?: string | undefined; } | undefine
 Démarre l'écoute d'un message de validation via l'API SMS User Consent de Google.
 Affiche un pop-up système de consentement à la réception du SMS.
 
+⚠️ L'écoute expire automatiquement après 5 minutes. Passé ce délai, relancez la méthode si nécessaire.
+
 | Param         | Type                                     |
 | ------------- | ---------------------------------------- |
 | **`options`** | <code>{ senderAddress?: string; }</code> |
@@ -594,6 +661,53 @@ Enregistre un listener pour la réception du message après consentement de l'ut
 --------------------
 
 
+### markAsRead(...)
+
+```typescript
+markAsRead(options: { id: string; }) => Promise<void>
+```
+
+Marque un message SMS comme lu (définit le champ 'read' à 1).
+Sur Android 10+, cette opération requiert d'être configuré comme l'application SMS par défaut.
+
+| Param         | Type                         |
+| ------------- | ---------------------------- |
+| **`options`** | <code>{ id: string; }</code> |
+
+--------------------
+
+
+### deleteSms(...)
+
+```typescript
+deleteSms(options: { id: string; }) => Promise<void>
+```
+
+Supprime un SMS par son identifiant unique.
+⚠️ Cette méthode requiert obligatoirement d'être configuré comme l'application SMS par défaut.
+
+| Param         | Type                         |
+| ------------- | ---------------------------- |
+| **`options`** | <code>{ id: string; }</code> |
+
+--------------------
+
+
+### sendSms(...)
+
+```typescript
+sendSms(options: { phoneNumber: string; message: string; mode: 'direct' | 'indirect'; }) => Promise<void>
+```
+
+Envoie un SMS.
+
+| Param         | Type                                                                                 |
+| ------------- | ------------------------------------------------------------------------------------ |
+| **`options`** | <code>{ phoneNumber: string; message: string; mode: 'direct' \| 'indirect'; }</code> |
+
+--------------------
+
+
 ### removeAllListeners()
 
 ```typescript
@@ -615,6 +729,7 @@ Supprime tous les listeners enregistrés sur ce plugin.
 | **`readSms`**    | <code><a href="#permissionstate">PermissionState</a></code> | État de la permission READ_SMS                                      |
 | **`receiveSms`** | <code><a href="#permissionstate">PermissionState</a></code> | État de la permission RECEIVE_SMS                                   |
 | **`phone`**      | <code><a href="#permissionstate">PermissionState</a></code> | État de la permission de lecture d'état de téléphone (SIM / numéro) |
+| **`sendSms`**    | <code><a href="#permissionstate">PermissionState</a></code> | État de la permission d'envoi de SMS (direct)                       |
 
 
 #### SmsMessage
@@ -653,7 +768,7 @@ qu'un filtrage JS sur un inbox complet.
 | **`maxDate`**      | <code>number</code>                                 | Timestamp ms maximum — retourne les SMS avant cette date |
 | **`indexFrom`**    | <code>number</code>                                 | Index de départ pour la pagination (défaut : 0)          |
 | **`maxCount`**     | <code>number</code>                                 | Nombre maximum de résultats (défaut : 100)               |
-| **`read`**         | <code>number</code>                                 | Filtrer par statut de lecture (0 = non lu, 1 = lu)       |
+| **`read`**         | <code>0 \| 1</code>                                 | Filtrer par statut de lecture (0 = non lu, 1 = lu)       |
 | **`orderBy`**      | <code>'date_desc' \| 'date_asc'</code>              | Ordre de tri (date_desc ou date_asc, défaut : date_desc) |
 
 

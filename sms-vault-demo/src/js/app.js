@@ -109,7 +109,54 @@ function renderSmsCard(sms, isNew = false) {
     </div>
     <div class="sms-body">${escapeHtml(sms.body || '(vide)')}</div>
     <div class="sms-date">${isNew ? '🟢 ' + formatShortTime(sms.date) : formatDate(sms.date)}</div>
+    ${sms.id ? `
+      <div class="sms-actions" style="margin-top:8px; display:flex; gap:8px;">
+        <button class="btn btn-ghost btn-xs btn-mark-read" data-id="${escapeHtml(sms.id)}">👁 Lu</button>
+        <button class="btn btn-danger-ghost btn-xs btn-delete" data-id="${escapeHtml(sms.id)}">🗑 Suppr.</button>
+      </div>
+    ` : ''}
   `;
+
+  if (sms.id) {
+    card.querySelector('.btn-mark-read').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const btn = card.querySelector('.btn-mark-read');
+      btn.disabled = true;
+      try {
+        await SmsVault.markAsRead({ id: sms.id });
+        addLog('👁', 'markAsRead', { id: sms.id }, 'Succès');
+        toast('SMS marqué comme lu', 'success');
+        btn.remove();
+      } catch (err) {
+        addLog('👁', 'markAsRead', { id: sms.id }, err.message, 'err');
+        toast(`Échec : ${err.message}`, 'error');
+        btn.disabled = false;
+      }
+    });
+
+    card.querySelector('.btn-delete').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const btn = card.querySelector('.btn-delete');
+      btn.disabled = true;
+      if (!confirm('Supprimer ce message ?')) {
+        btn.disabled = false;
+        return;
+      }
+      try {
+        await SmsVault.deleteSms({ id: sms.id });
+        addLog('🗑', 'deleteSms', { id: sms.id }, 'Succès');
+        toast('SMS supprimé', 'success');
+        card.style.transition = 'opacity 0.3s';
+        card.style.opacity = '0';
+        setTimeout(() => card.remove(), 300);
+      } catch (err) {
+        addLog('🗑', 'deleteSms', { id: sms.id }, err.message, 'err');
+        toast(`Échec : ${err.message}`, 'error');
+        btn.disabled = false;
+      }
+    });
+  }
+
   return card;
 }
 
@@ -138,6 +185,7 @@ async function refreshPermissionBadges() {
   setBadge('statusReadSms', status.readSms);
   setBadge('statusReceiveSms', status.receiveSms);
   setBadge('statusPhone', status.phone);
+  setBadge('statusSendSms', status.sendSms);
   return status;
 }
 
@@ -168,8 +216,9 @@ document.getElementById('btnRequestPerms').addEventListener('click', async () =>
     setBadge('statusReadSms', status.readSms);
     setBadge('statusReceiveSms', status.receiveSms);
     setBadge('statusPhone', status.phone);
+    setBadge('statusSendSms', status.sendSms);
     addLog('🔑', 'requestPermissions', {}, JSON.stringify(status));
-    toast('Permissions : ' + status.readSms + ' / ' + status.receiveSms + ' / ' + status.phone,
+    toast('Permissions : ' + status.readSms + ' / ' + status.receiveSms + ' / ' + status.phone + ' / ' + status.sendSms,
       status.readSms === 'granted' ? 'success' : 'warn');
   } catch (e) {
     addLog('🔑', 'requestPermissions', {}, e.message, 'err');
@@ -745,6 +794,45 @@ btnStopConsent.addEventListener('click', async () => {
     toast(e.message, 'error');
   }
 });
+// — Mode d'envoi radio
+let sendMode = 'indirect';
+document.querySelectorAll('.radio-btn[data-mode]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.radio-btn[data-mode]').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    sendMode = btn.dataset.mode;
+  });
+});
+
+// — Envoyer SMS
+document.getElementById('btnSendSms').addEventListener('click', async () => {
+  const btn = document.getElementById('btnSendSms');
+  const phoneNumber = document.getElementById('sendPhoneNumber').value.trim();
+  const message = document.getElementById('sendMessageText').value.trim();
+
+  if (!phoneNumber || !message) {
+    toast('Veuillez remplir le numéro et le message', 'warn');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Envoi…';
+
+  const options = { phoneNumber, message, mode: sendMode };
+
+  try {
+    await SmsVault.sendSms(options);
+    addLog('✉️', 'sendSms', options, `SMS envoyé (mode: ${sendMode})`);
+    toast('SMS envoyé avec succès', 'success');
+    document.getElementById('sendMessageText').value = '';
+  } catch (e) {
+    addLog('✉️', 'sendSms', options, e.message, 'err');
+    toast(`Échec de l'envoi : ${e.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '✉️ Envoyer';
+  }
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // INIT — vérifier les permissions au démarrage
@@ -755,6 +843,8 @@ btnStopConsent.addEventListener('click', async () => {
     const status = await SmsVault.checkPermissions();
     setBadge('statusReadSms', status.readSms);
     setBadge('statusReceiveSms', status.receiveSms);
+    setBadge('statusPhone', status.phone);
+    setBadge('statusSendSms', status.sendSms);
 
     const { isDefault } = await SmsVault.isDefaultSmsApp();
     setBadge('statusDefault', isDefault ? 'Oui' : 'Non');

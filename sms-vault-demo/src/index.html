@@ -179,6 +179,10 @@
 
       .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+      .btn-danger-ghost { background: rgba(239, 68, 68, 0.1); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.2); }
+      .btn-danger-ghost:hover { background: rgba(239, 68, 68, 0.2); }
+      .btn-xs { padding: 4px 8px; font-size: 0.72rem; width: auto; font-weight: 500; height: auto; border-radius: var(--radius-sm); }
+
       /* ── Status row ── */
       .status-row {
         display: flex;
@@ -549,6 +553,10 @@
               <span class="badge badge-unknown" id="statusPhone">?</span>
             </div>
             <div class="status-row">
+              <span class="status-label">SEND_SMS (Envoi direct)</span>
+              <span class="badge badge-unknown" id="statusSendSms">?</span>
+            </div>
+            <div class="status-row">
               <span class="status-label">App SMS par défaut</span>
               <span class="badge badge-unknown" id="statusDefault">?</span>
             </div>
@@ -817,6 +825,56 @@ Clé de test : [VOTRE_HASH]</pre>
 
       </section>
 
+      <!-- ══ TAB : SEND SMS ═══════════════════════════════════════════════ -->
+      <section id="tab-send" class="tab-panel">
+
+        <div class="card">
+          <div class="card-header">✉️ Envoyer un SMS — sendSms()</div>
+          <div class="card-body">
+
+            <!-- Numéro de téléphone -->
+            <div class="field">
+              <label class="field-label" for="sendPhoneNumber">Numéro de téléphone</label>
+              <input
+                type="tel"
+                id="sendPhoneNumber"
+                class="field-input"
+                placeholder="+33612345678"
+                autocomplete="off"
+              />
+            </div>
+
+            <!-- Message -->
+            <div class="field">
+              <label class="field-label" for="sendMessageText">Message</label>
+              <textarea
+                id="sendMessageText"
+                class="field-input"
+                placeholder="Votre message ici…"
+                rows="3"
+                style="resize: none;"
+              ></textarea>
+            </div>
+
+            <!-- Mode -->
+            <div class="field">
+              <label class="field-label">Mode d'envoi</label>
+              <div class="radio-group">
+                <div class="radio-btn selected" id="btnSendModeIndirect" data-mode="indirect">📤 Via l'app SMS</div>
+                <div class="radio-btn" id="btnSendModeDirect" data-mode="direct">⚡ Direct (Background)</div>
+              </div>
+            </div>
+
+            <hr class="divider" />
+
+            <button class="btn btn-primary" id="btnSendSms" style="width:100%">
+              ✉️ Envoyer
+            </button>
+          </div>
+        </div>
+
+      </section>
+
       <!-- ══ TAB 4 : LOGS ═════════════════════════════════════════════════ -->
       <section id="tab-logs" class="tab-panel">
 
@@ -852,6 +910,10 @@ Clé de test : [VOTRE_HASH]</pre>
       <button class="tab-btn" data-tab="otp">
         <span class="tab-icon">🔑</span>
         <span>OTP</span>
+      </button>
+      <button class="tab-btn" data-tab="send">
+        <span class="tab-icon">✉️</span>
+        <span>Envoyer</span>
       </button>
       <button class="tab-btn" data-tab="logs">
         <span class="tab-icon">📋</span>

@@ -46,7 +46,8 @@ class SmsReaderTest {
                             subject TEXT,
                             date_sent INTEGER,
                             creator TEXT,
-                            person INTEGER
+                            person INTEGER,
+                            sub_id INTEGER
                         )
                         """.trimIndent()
                     )

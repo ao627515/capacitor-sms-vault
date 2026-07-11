@@ -55,6 +55,10 @@ import java.lang.ref.WeakReference
                 Manifest.permission.READ_PHONE_STATE,
                 Manifest.permission.READ_PHONE_NUMBERS
             ]
+        ),
+        Permission(
+            alias = "sendSms",
+            strings = [Manifest.permission.SEND_SMS]
         )
     ]
 )
@@ -158,18 +162,20 @@ class SmsVaultPlugin : Plugin() {
     // ─── Gestion des permissions ─────────────────────────────────────────────
 
     /**
-     * Vérifie l'état des permissions READ_SMS et RECEIVE_SMS sans les demander.
+     * Vérifie l'état des permissions READ_SMS, RECEIVE_SMS et SEND_SMS sans les demander.
      */
     @PluginMethod
     override fun checkPermissions(call: PluginCall) {
         val readState = getPermissionState("readSms")
         val receiveState = getPermissionState("receiveSms")
         val phoneState = getPermissionState("phone")
+        val sendState = getPermissionState("sendSms")
         
         val result = JSObject().apply {
             put("readSms", readState?.toString() ?: "prompt")
             put("receiveSms", receiveState?.toString() ?: "prompt")
             put("phone", phoneState?.toString() ?: "prompt")
+            put("sendSms", sendState?.toString() ?: "prompt")
         }
         call.resolve(result)
     }
@@ -183,22 +189,25 @@ class SmsVaultPlugin : Plugin() {
         val readState = getPermissionState("readSms")
         val receiveState = getPermissionState("receiveSms")
         val phoneState = getPermissionState("phone")
+        val sendState = getPermissionState("sendSms")
 
         if (readState == PermissionState.GRANTED && 
             receiveState == PermissionState.GRANTED && 
-            phoneState == PermissionState.GRANTED) {
+            phoneState == PermissionState.GRANTED &&
+            sendState == PermissionState.GRANTED) {
             
             val result = JSObject().apply {
                 put("readSms", "granted")
                 put("receiveSms", "granted")
                 put("phone", "granted")
+                put("sendSms", "granted")
             }
             call.resolve(result)
             return
         }
 
         // Sinon, demande via le framework Capacitor
-        requestPermissionForAliases(arrayOf("readSms", "receiveSms", "phone"), call, "permissionsCallback")
+        requestPermissionForAliases(arrayOf("readSms", "receiveSms", "phone", "sendSms"), call, "permissionsCallback")
     }
 
     @PermissionCallback
@@ -206,11 +215,13 @@ class SmsVaultPlugin : Plugin() {
         val readState = getPermissionState("readSms")
         val receiveState = getPermissionState("receiveSms")
         val phoneState = getPermissionState("phone")
+        val sendState = getPermissionState("sendSms")
         
         val result = JSObject().apply {
             put("readSms", readState?.toString() ?: "prompt")
             put("receiveSms", receiveState?.toString() ?: "prompt")
             put("phone", phoneState?.toString() ?: "prompt")
+            put("sendSms", sendState?.toString() ?: "prompt")
         }
         call.resolve(result)
     }
@@ -822,6 +833,107 @@ class SmsVaultPlugin : Plugin() {
 
         @Synchronized
         fun clear() = set.clear()
+    }
+
+    @PluginMethod
+    fun markAsRead(call: PluginCall) {
+        val id = call.getString("id")
+        if (id == null) {
+            call.reject("MISSING_PARAMETER", "Parameter 'id' is required")
+            return
+        }
+
+        try {
+            val uri = Uri.withAppendedPath(Telephony.Sms.CONTENT_URI, id)
+            val values = android.content.ContentValues().apply {
+                put(Telephony.Sms.READ, 1)
+            }
+            val rowsUpdated = context.contentResolver.update(uri, values, null, null)
+            if (rowsUpdated > 0) {
+                call.resolve()
+            } else {
+                call.reject("UPDATE_FAILED", "No SMS found with ID $id or permission denied (must be default SMS app on Android 10+)")
+            }
+        } catch (e: Exception) {
+            Logger.error(TAG, "markAsRead failed", e)
+            call.reject("WRITE_FAILED", "Failed to mark SMS as read: ${e.message}", e)
+        }
+    }
+
+    @PluginMethod
+    fun deleteSms(call: PluginCall) {
+        val id = call.getString("id")
+        if (id == null) {
+            call.reject("MISSING_PARAMETER", "Parameter 'id' is required")
+            return
+        }
+
+        try {
+            val uri = Uri.withAppendedPath(Telephony.Sms.CONTENT_URI, id)
+            val rowsDeleted = context.contentResolver.delete(uri, null, null)
+            if (rowsDeleted > 0) {
+                call.resolve()
+            } else {
+                call.reject("DELETE_FAILED", "No SMS found with ID $id or permission denied (must be default SMS app on Android 10+)")
+            }
+        } catch (e: Exception) {
+            Logger.error(TAG, "deleteSms failed", e)
+            call.reject("DELETE_FAILED", "Failed to delete SMS: ${e.message}", e)
+        }
+    }
+
+    @PluginMethod
+    fun sendSms(call: PluginCall) {
+        val phoneNumber = call.getString("phoneNumber")
+        val message = call.getString("message")
+        val mode = call.getString("mode") ?: "indirect"
+
+        if (phoneNumber.isNullOrEmpty() || message.isNullOrEmpty()) {
+            call.reject("MISSING_PARAMETER", "Parameters 'phoneNumber' and 'message' are required")
+            return
+        }
+
+        if (mode == "direct") {
+            if (getPermissionState("sendSms") != PermissionState.GRANTED) {
+                call.reject("PERMISSION_DENIED", "SEND_SMS permission is required to send SMS directly")
+                return
+            }
+
+            try {
+                val smsManager: android.telephony.SmsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    context.getSystemService(android.telephony.SmsManager::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.telephony.SmsManager.getDefault()
+                }
+
+                val parts = smsManager.divideMessage(message)
+                if (parts.size > 1) {
+                    smsManager.sendMultipartTextMessage(phoneNumber, null, parts, null, null)
+                } else {
+                    smsManager.sendTextMessage(phoneNumber, null, message, null, null)
+                }
+                call.resolve()
+            } catch (e: Exception) {
+                Logger.error(TAG, "sendSms direct failed", e)
+                call.reject("SEND_FAILED", "Failed to send SMS directly: ${e.message}", e)
+            }
+        } else {
+            // Mode indirect : lance l'Intent système
+            try {
+                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                    data = Uri.parse("smsto:$phoneNumber")
+                    putExtra("sms_body", message)
+                }
+                activity?.startActivity(intent) ?: context.startActivity(intent.apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+                call.resolve()
+            } catch (e: Exception) {
+                Logger.error(TAG, "sendSms indirect failed", e)
+                call.reject("SEND_FAILED", "Failed to open default SMS app: ${e.message}", e)
+            }
+        }
     }
 
     private fun handleSmsDbChange() {

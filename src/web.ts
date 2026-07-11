@@ -79,4 +79,16 @@ export class SmsVaultWeb extends WebPlugin implements SmsVaultPlugin {
   async stopSmsUserConsent(): Promise<void> {
     throw this.unavailable('SmsVault is not available on web.');
   }
+
+  async markAsRead(_options: { id: string }): Promise<void> {
+    throw this.unavailable('SmsVault is not available on web.');
+  }
+
+  async deleteSms(_options: { id: string }): Promise<void> {
+    throw this.unavailable('SmsVault is not available on web.');
+  }
+
+  async sendSms(_options: { phoneNumber: string; message: string; mode: 'direct' | 'indirect' }): Promise<void> {
+    throw this.unavailable('SmsVault is not available on web.');
+  }
 }

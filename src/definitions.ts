@@ -61,6 +61,8 @@ export interface PermissionStatus {
   receiveSms: PermissionState;
   /** État de la permission de lecture d'état de téléphone (SIM / numéro) */
   phone: PermissionState;
+  /** État de la permission d'envoi de SMS (direct) */
+  sendSms: PermissionState;
 }
 
 export interface SimCardInfo {
@@ -134,7 +136,7 @@ export interface SmsFilter {
   /** Nombre maximum de résultats (défaut : 100) */
   maxCount?: number;
   /** Filtrer par statut de lecture (0 = non lu, 1 = lu) */
-  read?: number;
+  read?: 0 | 1;
   /** Ordre de tri (date_desc ou date_asc, défaut : date_desc) */
   orderBy?: 'date_desc' | 'date_asc';
 }
@@ -242,6 +244,8 @@ export interface SmsVaultPlugin {
    * Démarre la détection d'OTP via la SMS Retriever API.
    * L'API attend la réception d'un unique message de format spécifique avec la clé de hachage de l'application.
    * Ne requiert aucune permission SMS sensible.
+   * 
+   * ⚠️ L'écoute expire automatiquement après 5 minutes. Passé ce délai, relancez la méthode si nécessaire.
    */
   startSmsRetriever(): Promise<void>;
 
@@ -285,8 +289,12 @@ export interface SmsVaultPlugin {
   /**
    * Démarre l'écoute d'un message de validation via l'API SMS User Consent de Google.
    * Affiche un pop-up système de consentement à la réception du SMS.
+   * 
+   * ⚠️ L'écoute expire automatiquement après 5 minutes. Passé ce délai, relancez la méthode si nécessaire.
    *
-   * @param options.senderAddress - Filtrer optionnellement par adresse d'expéditeur
+   * @param options.senderAddress - Numéro de l'expéditeur attendu (format E.164, ex: +22670000000). 
+   * Si fourni, le popup ne s'affiche que pour ce numéro, ce qui améliore la sécurité. 
+   * Si absent, tout SMS contenant un code alphanumérique de 4 à 10 caractères déclenchera le popup.
    */
   startSmsUserConsent(options?: { senderAddress?: string }): Promise<void>;
 
@@ -310,6 +318,38 @@ export interface SmsVaultPlugin {
     eventName: 'smsUserConsentReceived',
     listener: (data: { message: string }) => void,
   ): Promise<PluginListenerHandle>;
+
+  // ── Modification & Envoi ──────────────────────
+
+  /**
+   * Marque un message SMS comme lu (définit le champ 'read' à 1).
+   * Sur Android 10+, cette opération requiert d'être configuré comme l'application SMS par défaut.
+   * 
+   * @param options.id - Identifiant unique du SMS à mettre à jour
+   */
+  markAsRead(options: { id: string }): Promise<void>;
+
+  /**
+   * Supprime un SMS par son identifiant unique.
+   * ⚠️ Cette méthode requiert obligatoirement d'être configuré comme l'application SMS par défaut.
+   * 
+   * @param options.id - Identifiant unique du SMS à supprimer
+   */
+  deleteSms(options: { id: string }): Promise<void>;
+
+  /**
+   * Envoie un SMS.
+   * 
+   * @param options.phoneNumber - Numéro de téléphone du destinataire (format E.164 recommandé)
+   * @param options.message - Contenu texte du SMS
+   * @param options.mode - Mode d'envoi. 'direct' envoie directement le SMS en tâche de fond (nécessite la permission SEND_SMS),
+   * tandis que 'indirect' ouvre l'application de messagerie par défaut pré-remplie (aucune permission requise).
+   */
+  sendSms(options: {
+    phoneNumber: string;
+    message: string;
+    mode: 'direct' | 'indirect';
+  }): Promise<void>;
 
   // ── Utilitaires ───────────────────────────────
 
