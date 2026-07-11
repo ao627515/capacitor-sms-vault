@@ -336,7 +336,9 @@ await SmsVault.sendSms({
 * [`addListener('simsChanged', ...)`](#addlistenersimschanged-)
 * [`addListener('smsUserConsentReceived', ...)`](#addlistenersmsuserconsentreceived-)
 * [`markAsRead(...)`](#markasread)
+* [`markAsSeen(...)`](#markasseen)
 * [`deleteSms(...)`](#deletesms)
+* [`setSmsLocked(...)`](#setsmslocked)
 * [`sendSms(...)`](#sendsms)
 * [`removeAllListeners()`](#removealllisteners)
 * [Interfaces](#interfaces)
@@ -669,6 +671,23 @@ markAsRead(options: { id: string; }) => Promise<void>
 
 Marque un message SMS comme lu (définit le champ 'read' à 1).
 Sur Android 10+, cette opération requiert d'être configuré comme l'application SMS par défaut.
+Remarque : marque également le message comme vu.
+
+| Param         | Type                         |
+| ------------- | ---------------------------- |
+| **`options`** | <code>{ id: string; }</code> |
+
+--------------------
+
+
+### markAsSeen(...)
+
+```typescript
+markAsSeen(options: { id: string; }) => Promise<void>
+```
+
+Marque un message SMS comme vu (définit le champ 'seen' à 1).
+Sur Android 10+, cette opération requiert d'être configuré comme l'application SMS par défaut.
 
 | Param         | Type                         |
 | ------------- | ---------------------------- |
@@ -680,15 +699,33 @@ Sur Android 10+, cette opération requiert d'être configuré comme l'applicatio
 ### deleteSms(...)
 
 ```typescript
-deleteSms(options: { id: string; }) => Promise<void>
+deleteSms(options: { id: string; force?: boolean; }) => Promise<{ deleted: boolean; reason?: 'locked' | 'not_found'; }>
 ```
 
 Supprime un SMS par son identifiant unique.
 ⚠️ Cette méthode requiert obligatoirement d'être configuré comme l'application SMS par défaut.
 
-| Param         | Type                         |
-| ------------- | ---------------------------- |
-| **`options`** | <code>{ id: string; }</code> |
+| Param         | Type                                          |
+| ------------- | --------------------------------------------- |
+| **`options`** | <code>{ id: string; force?: boolean; }</code> |
+
+**Returns:** <code>Promise&lt;{ deleted: boolean; reason?: 'locked' | 'not_found'; }&gt;</code>
+
+--------------------
+
+
+### setSmsLocked(...)
+
+```typescript
+setSmsLocked(options: { id: string; locked: boolean; }) => Promise<void>
+```
+
+Verrouille ou déverrouille un SMS par son identifiant unique.
+⚠️ Cette méthode requiert obligatoirement d'être configuré comme l'application SMS par défaut.
+
+| Param         | Type                                          |
+| ------------- | --------------------------------------------- |
+| **`options`** | <code>{ id: string; locked: boolean; }</code> |
 
 --------------------
 
@@ -734,19 +771,24 @@ Supprime tous les listeners enregistrés sur ce plugin.
 
 #### SmsMessage
 
-| Prop                 | Type                                                | Description                                                               |
-| -------------------- | --------------------------------------------------- | ------------------------------------------------------------------------- |
-| **`id`**             | <code>string</code>                                 | Identifiant unique du SMS (depuis la base ContentProvider)                |
-| **`threadId`**       | <code>string</code>                                 | Identifiant du fil de conversation                                        |
-| **`address`**        | <code>string</code>                                 | Numéro ou nom de l'expéditeur                                             |
-| **`body`**           | <code>string</code>                                 | Contenu brut du SMS                                                       |
-| **`subject`**        | <code>string</code>                                 | Sujet du message (MMS ou opérateurs spécifiques)                          |
-| **`date`**           | <code>number</code>                                 | Timestamp local en millisecondes (date de réception/envoi sur l'appareil) |
-| **`dateSent`**       | <code>number</code>                                 | Timestamp réseau en millisecondes (date d'envoi côté opérateur)           |
-| **`type`**           | <code><a href="#messagetype">MessageType</a></code> | Type de message selon <a href="#messagetype">MessageType</a>              |
-| **`creator`**        | <code>string</code>                                 | Package de l'application ayant créé le SMS                                |
-| **`person`**         | <code>string</code>                                 | Identifiant du contact associé à l'expéditeur                             |
-| **`subscriptionId`** | <code>number</code>                                 | Identifiant d'abonnement SIM réceptrice (Android uniquement)              |
+| Prop                 | Type                                                            | Description                                                                     |
+| -------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **`id`**             | <code>string</code>                                             | Identifiant unique du SMS (depuis la base ContentProvider)                      |
+| **`threadId`**       | <code>string</code>                                             | Identifiant du fil de conversation                                              |
+| **`address`**        | <code>string</code>                                             | Numéro ou nom de l'expéditeur                                                   |
+| **`body`**           | <code>string</code>                                             | Contenu brut du SMS                                                             |
+| **`subject`**        | <code>string</code>                                             | Sujet du message (MMS ou opérateurs spécifiques)                                |
+| **`date`**           | <code>number</code>                                             | Timestamp local en millisecondes (date de réception/envoi sur l'appareil)       |
+| **`dateSent`**       | <code>number</code>                                             | Timestamp réseau en millisecondes (date d'envoi côté opérateur)                 |
+| **`type`**           | <code><a href="#messagetype">MessageType</a></code>             | Type de message selon <a href="#messagetype">MessageType</a>                    |
+| **`creator`**        | <code>string</code>                                             | Package de l'application ayant créé le SMS                                      |
+| **`person`**         | <code>string</code>                                             | Identifiant du contact associé à l'expéditeur                                   |
+| **`subscriptionId`** | <code>number</code>                                             | Identifiant d'abonnement SIM réceptrice (Android uniquement)                    |
+| **`seen`**           | <code>boolean</code>                                            | Indique si le message a été vu dans la liste/notification (Android uniquement)  |
+| **`status`**         | <code><a href="#smsdeliverystatus">SmsDeliveryStatus</a></code> | Statut de livraison (Android uniquement)                                        |
+| **`errorCode`**      | <code>number</code>                                             | Code d'erreur associé à l'envoi/réception (Android uniquement)                  |
+| **`locked`**         | <code>boolean</code>                                            | Indique si le message est verrouillé contre la suppression (Android uniquement) |
+| **`serviceCenter`**  | <code>string</code>                                             | Numéro du centre de messagerie de l'opérateur (Android uniquement)              |
 
 
 #### SmsFilter
@@ -755,21 +797,22 @@ Filtres appliqués côté natif (Kotlin/ContentResolver)
 avant le retour des données au JS — plus performant
 qu'un filtrage JS sur un inbox complet.
 
-| Prop               | Type                                                | Description                                              |
-| ------------------ | --------------------------------------------------- | -------------------------------------------------------- |
-| **`type`**         | <code><a href="#messagetype">MessageType</a></code> | Type de boîte à interroger (défaut : INBOX)              |
-| **`id`**           | <code>string</code>                                 | Identifiant exact du SMS                                 |
-| **`threadId`**     | <code>string</code>                                 | Identifiant exact du fil de conversation                 |
-| **`address`**      | <code>string</code>                                 | Filtrer par expéditeur (correspondance partielle)        |
-| **`addressRegex`** | <code>string</code>                                 | Filtrer par expéditeur via expression régulière          |
-| **`body`**         | <code>string</code>                                 | Filtrer par contenu du corps (correspondance partielle)  |
-| **`bodyRegex`**    | <code>string</code>                                 | Filtrer par contenu du corps via expression régulière    |
-| **`minDate`**      | <code>number</code>                                 | Timestamp ms minimum — retourne les SMS après cette date |
-| **`maxDate`**      | <code>number</code>                                 | Timestamp ms maximum — retourne les SMS avant cette date |
-| **`indexFrom`**    | <code>number</code>                                 | Index de départ pour la pagination (défaut : 0)          |
-| **`maxCount`**     | <code>number</code>                                 | Nombre maximum de résultats (défaut : 100)               |
-| **`read`**         | <code>0 \| 1</code>                                 | Filtrer par statut de lecture (0 = non lu, 1 = lu)       |
-| **`orderBy`**      | <code>'date_desc' \| 'date_asc'</code>              | Ordre de tri (date_desc ou date_asc, défaut : date_desc) |
+| Prop               | Type                                                | Description                                                                           |
+| ------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **`type`**         | <code><a href="#messagetype">MessageType</a></code> | Type de boîte à interroger (défaut : INBOX)                                           |
+| **`id`**           | <code>string</code>                                 | Identifiant exact du SMS                                                              |
+| **`threadId`**     | <code>string</code>                                 | Identifiant exact du fil de conversation                                              |
+| **`address`**      | <code>string</code>                                 | Filtrer par expéditeur (correspondance partielle)                                     |
+| **`addressRegex`** | <code>string</code>                                 | Filtrer par expéditeur via expression régulière                                       |
+| **`body`**         | <code>string</code>                                 | Filtrer par contenu du corps (correspondance partielle)                               |
+| **`bodyRegex`**    | <code>string</code>                                 | Filtrer par contenu du corps via expression régulière                                 |
+| **`minDate`**      | <code>number</code>                                 | Timestamp ms minimum — retourne les SMS après cette date                              |
+| **`maxDate`**      | <code>number</code>                                 | Timestamp ms maximum — retourne les SMS avant cette date                              |
+| **`indexFrom`**    | <code>number</code>                                 | Index de départ pour la pagination (défaut : 0)                                       |
+| **`maxCount`**     | <code>number</code>                                 | Nombre maximum de résultats (défaut : 100)                                            |
+| **`read`**         | <code>0 \| 1</code>                                 | Filtrer par statut de lecture (0 = non lu, 1 = lu)                                    |
+| **`seen`**         | <code>0 \| 1</code>                                 | Filtrer par statut d'affichage notification (0 = non vu, 1 = vu) (Android uniquement) |
+| **`orderBy`**      | <code>'date_desc' \| 'date_asc'</code>              | Ordre de tri (date_desc ou date_asc, défaut : date_desc)                              |
 
 
 #### SmsProjection
@@ -779,13 +822,18 @@ Omettre une colonne réduit la quantité de données
 transférée entre la couche native et le JS.
 Par défaut toutes les colonnes obligatoires sont retournées.
 
-| Prop           | Type                 |
-| -------------- | -------------------- |
-| **`threadId`** | <code>boolean</code> |
-| **`subject`**  | <code>boolean</code> |
-| **`dateSent`** | <code>boolean</code> |
-| **`creator`**  | <code>boolean</code> |
-| **`person`**   | <code>boolean</code> |
+| Prop                | Type                 |
+| ------------------- | -------------------- |
+| **`threadId`**      | <code>boolean</code> |
+| **`subject`**       | <code>boolean</code> |
+| **`dateSent`**      | <code>boolean</code> |
+| **`creator`**       | <code>boolean</code> |
+| **`person`**        | <code>boolean</code> |
+| **`seen`**          | <code>boolean</code> |
+| **`status`**        | <code>boolean</code> |
+| **`errorCode`**     | <code>boolean</code> |
+| **`locked`**        | <code>boolean</code> |
+| **`serviceCenter`** | <code>boolean</code> |
 
 
 #### PluginListenerHandle
@@ -845,5 +893,15 @@ Construct a type with a set of properties K of type T
 | **`OUTBOX`** | <code>4</code> | Messages en attente d'envoi                |
 | **`FAILED`** | <code>5</code> | Messages dont l'envoi a échoué             |
 | **`QUEUED`** | <code>6</code> | Messages en file d'attente                 |
+
+
+#### SmsDeliveryStatus
+
+| Members        | Value           | Description                    |
+| -------------- | --------------- | ------------------------------ |
+| **`NONE`**     | <code>-1</code> | Aucun accusé de réception reçu |
+| **`COMPLETE`** | <code>0</code>  | SMS livré avec succès          |
+| **`PENDING`**  | <code>32</code> | Livraison en attente           |
+| **`FAILED`**   | <code>64</code> | Livraison échouée              |
 
 </docgen-api>
