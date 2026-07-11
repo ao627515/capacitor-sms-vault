@@ -30,7 +30,7 @@ export function renderSmsCard(sms, isNew = false) {
   card.className = 'sms-card';
   const typeStr = typeof sms.type === 'number' ? mapTypeToString(sms.type) : (sms.type || 'inbox');
   
-  // Construit le HTML initial de la carte avec les nouveaux boutons
+  // Construit le code HTML initial de la carte avec les nouveaux boutons.
   card.innerHTML = `
     <div class="sms-card-head">
       <span class="sms-address">${escapeHtml(sms.address || '(inconnu)')}</span>
@@ -55,7 +55,7 @@ export function renderSmsCard(sms, isNew = false) {
   `;
 
   if (sms.id) {
-    // Bouton : Marquer comme vu
+    // Bouton : marquer comme vu.
     card.querySelector('.btn-mark-seen').addEventListener('click', async (e) => {
       e.stopPropagation();
       const btn = card.querySelector('.btn-mark-seen');
@@ -72,7 +72,7 @@ export function renderSmsCard(sms, isNew = false) {
       }
     });
 
-    // Bouton : Marquer comme lu
+    // Bouton : marquer comme lu.
     card.querySelector('.btn-mark-read').addEventListener('click', async (e) => {
       e.stopPropagation();
       const btn = card.querySelector('.btn-mark-read');
@@ -89,7 +89,7 @@ export function renderSmsCard(sms, isNew = false) {
       }
     });
 
-    // Bouton : Basculer le verrouillage (setSmsLocked)
+    // Bouton : basculer le verrouillage (setSmsLocked).
     card.querySelector('.btn-toggle-lock').addEventListener('click', async (e) => {
       e.stopPropagation();
       const btn = card.querySelector('.btn-toggle-lock');
@@ -114,7 +114,7 @@ export function renderSmsCard(sms, isNew = false) {
       }
     });
 
-    // Bouton : Supprimer (gère force: true pour SMS verrouillés)
+    // Bouton : supprimer (gère force: true pour les SMS verrouillés).
     card.querySelector('.btn-delete').addEventListener('click', async (e) => {
       e.stopPropagation();
       const btn = card.querySelector('.btn-delete');

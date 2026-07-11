@@ -3,8 +3,8 @@ import XCTest
 
 class SmsVaultTests: XCTestCase {
     func testEcho() {
-        // This is an example of a functional test case for a plugin.
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
+        // Exemple de cas de test fonctionnel pour le plugin.
+        // Utilisation de XCTAssert pour vérifier le bon comportement.
 
         let implementation = SmsVault()
         let value = "Hello, World!"

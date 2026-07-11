@@ -385,7 +385,7 @@ isDefaultSmsApp() => Promise<{ isDefault: boolean; }>
 ```
 
 Vérifie si l'application est l'application SMS par défaut du système.
-Sur Android 10+, seule l'app par défaut peut lire l'historique SMS complet.
+Sur Android 10+, seule l'application par défaut peut lire l'historique SMS complet.
 
 **Returns:** <code>Promise&lt;{ isDefault: boolean; }&gt;</code>
 
@@ -398,7 +398,7 @@ Sur Android 10+, seule l'app par défaut peut lire l'historique SMS complet.
 requestDefaultSmsApp() => Promise<{ isDefault: boolean; }>
 ```
 
-Ouvre le dialogue système pour demander à l'utilisateur de définir
+Ouvre la boîte de dialogue système pour demander à l'utilisateur de définir
 cette application comme application SMS par défaut.
 Retourne le statut après la décision de l'utilisateur.
 
@@ -453,8 +453,8 @@ Retourne toutes les colonnes brutes de la table SMS Android,
 sans mapping — utile pour le debug ou l'accès à des colonnes
 non exposées par l'API standard (sub_id, service_center, etc.).
 
-⚠️ Performance : ne pas utiliser sur de grands volumes.
-Préférer getSmsList() avec projection pour un usage en production.
+⚠️ Performance : à éviter sur de grands volumes de messages.
+Préférer l'utilisation de getSmsList() avec une projection pour un usage en production.
 
 | Param         | Type                                                          |
 | ------------- | ------------------------------------------------------------- |
@@ -520,7 +520,7 @@ startSmsRetriever() => Promise<void>
 ```
 
 Démarre la détection d'OTP via la SMS Retriever API.
-L'API attend la réception d'un unique message de format spécifique avec la clé de hachage de l'application.
+L'API attend la réception d'un unique message au format spécifique contenant la clé de hachage de l'application.
 Ne requiert aucune permission SMS sensible.
 
 ⚠️ L'écoute expire automatiquement après 5 minutes. Passé ce délai, relancez la méthode si nécessaire.
@@ -566,7 +566,7 @@ Requiert la permission 'phone' (READ_PHONE_STATE et READ_PHONE_NUMBERS).
 getDeviceSimProfile() => Promise<SimProfile>
 ```
 
-Récupère le profil détaillé des cartes SIM de l'appareil (état double SIM et liste).
+Récupère le profil détaillé des cartes SIM de l'appareil (état double SIM et liste des cartes actives).
 Requiert la permission 'phone'.
 
 **Returns:** <code>Promise&lt;<a href="#simprofile">SimProfile</a>&gt;</code>
@@ -605,7 +605,7 @@ startSmsUserConsent(options?: { senderAddress?: string | undefined; } | undefine
 ```
 
 Démarre l'écoute d'un message de validation via l'API SMS User Consent de Google.
-Affiche un pop-up système de consentement à la réception du SMS.
+Affiche une boîte de dialogue système de consentement à la réception du SMS.
 
 ⚠️ L'écoute expire automatiquement après 5 minutes. Passé ce délai, relancez la méthode si nécessaire.
 
@@ -670,8 +670,8 @@ markAsRead(options: { id: string; }) => Promise<void>
 ```
 
 Marque un message SMS comme lu (définit le champ 'read' à 1).
-Sur Android 10+, cette opération requiert d'être configuré comme l'application SMS par défaut.
-Remarque : marque également le message comme vu.
+Sur Android 10+, cette opération requiert que l'application soit configurée comme l'application SMS par défaut.
+Remarque : cette opération marque également le message comme vu.
 
 | Param         | Type                         |
 | ------------- | ---------------------------- |
@@ -687,7 +687,7 @@ markAsSeen(options: { id: string; }) => Promise<void>
 ```
 
 Marque un message SMS comme vu (définit le champ 'seen' à 1).
-Sur Android 10+, cette opération requiert d'être configuré comme l'application SMS par défaut.
+Sur Android 10+, cette opération requiert que l'application soit configurée comme l'application SMS par défaut.
 
 | Param         | Type                         |
 | ------------- | ---------------------------- |
@@ -703,7 +703,7 @@ deleteSms(options: { id: string; force?: boolean; }) => Promise<{ deleted: boole
 ```
 
 Supprime un SMS par son identifiant unique.
-⚠️ Cette méthode requiert obligatoirement d'être configuré comme l'application SMS par défaut.
+⚠️ Cette méthode requiert obligatoirement que l'application soit configurée comme l'application SMS par défaut.
 
 | Param         | Type                                          |
 | ------------- | --------------------------------------------- |
@@ -721,7 +721,7 @@ setSmsLocked(options: { id: string; locked: boolean; }) => Promise<void>
 ```
 
 Verrouille ou déverrouille un SMS par son identifiant unique.
-⚠️ Cette méthode requiert obligatoirement d'être configuré comme l'application SMS par défaut.
+⚠️ Cette méthode requiert obligatoirement que l'application soit configurée comme l'application SMS par défaut.
 
 | Param         | Type                                          |
 | ------------- | --------------------------------------------- |
@@ -761,12 +761,12 @@ Supprime tous les listeners enregistrés sur ce plugin.
 
 #### PermissionStatus
 
-| Prop             | Type                                                        | Description                                                         |
-| ---------------- | ----------------------------------------------------------- | ------------------------------------------------------------------- |
-| **`readSms`**    | <code><a href="#permissionstate">PermissionState</a></code> | État de la permission READ_SMS                                      |
-| **`receiveSms`** | <code><a href="#permissionstate">PermissionState</a></code> | État de la permission RECEIVE_SMS                                   |
-| **`phone`**      | <code><a href="#permissionstate">PermissionState</a></code> | État de la permission de lecture d'état de téléphone (SIM / numéro) |
-| **`sendSms`**    | <code><a href="#permissionstate">PermissionState</a></code> | État de la permission d'envoi de SMS (direct)                       |
+| Prop             | Type                                                        | Description                                                                  |
+| ---------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **`readSms`**    | <code><a href="#permissionstate">PermissionState</a></code> | État de la permission READ_SMS                                               |
+| **`receiveSms`** | <code><a href="#permissionstate">PermissionState</a></code> | État de la permission RECEIVE_SMS                                            |
+| **`phone`**      | <code><a href="#permissionstate">PermissionState</a></code> | État de la permission de lecture de l'état du téléphone (carte SIM / numéro) |
+| **`sendSms`**    | <code><a href="#permissionstate">PermissionState</a></code> | État de la permission d'envoi de SMS (direct)                                |
 
 
 #### SmsMessage
@@ -783,8 +783,8 @@ Supprime tous les listeners enregistrés sur ce plugin.
 | **`type`**           | <code><a href="#messagetype">MessageType</a></code>             | Type de message selon <a href="#messagetype">MessageType</a>                    |
 | **`creator`**        | <code>string</code>                                             | Package de l'application ayant créé le SMS                                      |
 | **`person`**         | <code>string</code>                                             | Identifiant du contact associé à l'expéditeur                                   |
-| **`subscriptionId`** | <code>number</code>                                             | Identifiant d'abonnement SIM réceptrice (Android uniquement)                    |
-| **`seen`**           | <code>boolean</code>                                            | Indique si le message a été vu dans la liste/notification (Android uniquement)  |
+| **`subscriptionId`** | <code>number</code>                                             | Identifiant de l'abonnement SIM réceptrice (Android uniquement)                 |
+| **`seen`**           | <code>boolean</code>                                            | Indique si le message a été vu (liste ou notification) (Android uniquement)     |
 | **`status`**         | <code><a href="#smsdeliverystatus">SmsDeliveryStatus</a></code> | Statut de livraison (Android uniquement)                                        |
 | **`errorCode`**      | <code>number</code>                                             | Code d'erreur associé à l'envoi/réception (Android uniquement)                  |
 | **`locked`**         | <code>boolean</code>                                            | Indique si le message est verrouillé contre la suppression (Android uniquement) |
@@ -819,8 +819,8 @@ qu'un filtrage JS sur un inbox complet.
 
 Sélection des colonnes à retourner dans <a href="#smsmessage">SmsMessage</a>.
 Omettre une colonne réduit la quantité de données
-transférée entre la couche native et le JS.
-Par défaut toutes les colonnes obligatoires sont retournées.
+transférées entre la couche native et la couche JavaScript.
+Par défaut, toutes les colonnes obligatoires sont retournées.
 
 | Prop                | Type                 |
 | ------------------- | -------------------- |
@@ -849,7 +849,7 @@ Par défaut toutes les colonnes obligatoires sont retournées.
 | -------------------- | ------------------- | -------------------------------------------------------------------------- |
 | **`carrierName`**    | <code>string</code> | Nom de l'opérateur (ex: Orange, SFR)                                       |
 | **`countryIso`**     | <code>string</code> | Code pays ISO à 2 lettres (ex: fr)                                         |
-| **`phoneNumber`**    | <code>string</code> | Numéro de téléphone de la ligne si provisionné (peut être vide)            |
+| **`phoneNumber`**    | <code>string</code> | Numéro de téléphone de la ligne s'il est provisionné (peut être vide)      |
 | **`simSlotIndex`**   | <code>number</code> | Index du slot SIM physique (0, 1, etc.)                                    |
 | **`subscriptionId`** | <code>number</code> | Identifiant d'abonnement interne Android                                   |
 | **`mcc`**            | <code>string</code> | Code pays mobile (Mobile Country Code) (ex: 208, 613) (Android uniquement) |

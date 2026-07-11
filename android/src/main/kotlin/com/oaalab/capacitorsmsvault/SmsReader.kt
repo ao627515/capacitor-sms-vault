@@ -9,8 +9,7 @@ import com.getcapacitor.JSObject
 import com.getcapacitor.Logger
 
 /**
- * Encapsule la lecture de l'historique SMS via ContentResolver.
- * Prend en charge la projection, le filtrage SQL natif, et le filtrage par expressions régulières en mémoire.
+ * Prend en charge la projection, le filtrage SQL natif et le filtrage par expressions régulières en mémoire.
  */
 class SmsReader(private val context: Context) {
 
@@ -25,7 +24,7 @@ class SmsReader(private val context: Context) {
     fun getSmsList(filterObj: JSObject?, projectionObj: JSObject?): JSArray {
         val result = JSArray()
 
-        // 1. Déterminer la projection SQL (colonnes à interroger)
+        // 1. Détermine la projection SQL (colonnes à interroger)
         val projectionList = mutableListOf(
             Telephony.Sms._ID,
             Telephony.Sms.ADDRESS,
@@ -67,7 +66,7 @@ class SmsReader(private val context: Context) {
         val hasServiceCenter = projectionObj?.optBoolean("serviceCenter") == true
         if (hasServiceCenter) projectionList.add(Telephony.Sms.SERVICE_CENTER)
 
-        // 2. Construire la clause WHERE
+        // 2. Construit la clause WHERE
         val selection = mutableListOf<String>()
         val selectionArgs = mutableListOf<String>()
         buildSelectionAndArgs(filterObj, selection, selectionArgs)
@@ -75,7 +74,7 @@ class SmsReader(private val context: Context) {
         val finalSelection = if (selection.isEmpty()) null else selection.joinToString(" AND ")
         val finalSelectionArgs = if (selectionArgs.isEmpty()) null else selectionArgs.toTypedArray()
 
-        // 3. Déterminer l'ordre de tri (date ASC ou DESC)
+        // 3. Détermine l'ordre de tri (date ASC ou DESC)
         val orderByStr = filterObj?.getString("orderBy")
         val sortOrder = when (orderByStr) {
             "date_asc"  -> "${Telephony.Sms.DATE} ASC"
@@ -83,7 +82,7 @@ class SmsReader(private val context: Context) {
             else        -> "${Telephony.Sms.DATE} DESC"
         }
 
-        // 4. Préparer les Regex (pour filtrage tardif en Kotlin)
+        // 4. Prépare les expressions régulières (pour le filtrage ultérieur en Kotlin)
         val addressRegexStr = filterObj?.getString("addressRegex")
         val addressRegex = addressRegexStr?.toRegex(RegexOption.IGNORE_CASE)
 
@@ -132,7 +131,7 @@ class SmsReader(private val context: Context) {
                     val addressVal = c.getString(addressIndex) ?: ""
                     val bodyVal = c.getString(bodyIndex) ?: ""
 
-                    // Filtrage Regex
+                    // Filtrage par expressions régulières
                     if (addressRegex != null && !addressRegex.containsMatchIn(addressVal)) {
                         continue
                     }
@@ -168,7 +167,7 @@ class SmsReader(private val context: Context) {
                             result.put(smsObj)
                             addedCount++
                         } else {
-                            break // MaxCount atteint
+                            break // Nombre maximum de messages (maxCount) atteint
                         }
                     }
                     matchCount++
@@ -203,7 +202,7 @@ class SmsReader(private val context: Context) {
         val bodyRegexStr = filterObj?.getString("bodyRegex")
 
         if (addressRegexStr == null && bodyRegexStr == null) {
-            // Pas de regex : exécution SQL direct COUNT (très performant)
+            // Pas d'expression régulière : exécution d'un COUNT en SQL direct (très performant)
             var count = 0
             var cursor: Cursor? = null
             try {
@@ -224,7 +223,7 @@ class SmsReader(private val context: Context) {
             }
             return count
         } else {
-            // Avec regex : nous devons tester en mémoire
+            // Avec expression régulière : test et filtrage effectués en mémoire
             val addressRegex = addressRegexStr?.toRegex(RegexOption.IGNORE_CASE)
             val bodyRegex = bodyRegexStr?.toRegex(RegexOption.IGNORE_CASE)
 
@@ -260,7 +259,7 @@ class SmsReader(private val context: Context) {
     }
 
     /**
-     * Retourne toutes les colonnes brutes sans mapping particulier.
+     * Retourne toutes les colonnes brutes de la table des SMS, sans aucun mapping.
      */
     fun getRawSmsList(filterObj: JSObject?): JSArray {
         val result = JSArray()
@@ -289,7 +288,7 @@ class SmsReader(private val context: Context) {
 
         var cursor: Cursor? = null
         try {
-            // null en projection = toutes les colonnes
+            // Passer null pour la projection retourne toutes les colonnes
             cursor = context.contentResolver.query(
                 Telephony.Sms.CONTENT_URI,
                 null,
@@ -350,7 +349,7 @@ class SmsReader(private val context: Context) {
     }
 
     /**
-     * Construit les filtres SQL basés sur l'objet de filtrage.
+     * Construit les clauses de sélection SQL basées sur l'objet de filtrage.
      */
     private fun buildSelectionAndArgs(
         filterObj: JSObject?,
@@ -364,7 +363,7 @@ class SmsReader(private val context: Context) {
                 selection.add("${Telephony.Sms.TYPE} = ?")
                 selectionArgs.add(type.toString())
             } else if (type == null) {
-                // Par défaut : INBOX (type = 1)
+                // Par défaut : boîte de réception (INBOX, type = 1)
                 selection.add("${Telephony.Sms.TYPE} = ?")
                 selectionArgs.add("1")
             }
@@ -410,13 +409,13 @@ class SmsReader(private val context: Context) {
                 selection.add("${Telephony.Sms.ADDRESS} = ?")
                 selectionArgs.add(address)
             } else if (addressRegex != null) {
-                // Filtré tardivement en mémoire (Kotlin)
+                // Filtré ultérieurement en mémoire (Kotlin)
             } else if (body != null) {
                 selection.add("${Telephony.Sms.BODY} LIKE ?")
                 selectionArgs.add("%$body%")
             }
         } else {
-            // Comportement par défaut : boîte INBOX (type = 1)
+            // Comportement par défaut : boîte de réception (INBOX, type = 1)
             selection.add("${Telephony.Sms.TYPE} = ?")
             selectionArgs.add("1")
         }

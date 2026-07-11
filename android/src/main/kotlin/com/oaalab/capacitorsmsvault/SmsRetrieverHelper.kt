@@ -13,7 +13,7 @@ import com.google.android.gms.common.api.Status
 /**
  * Classe d'aide pour encapsuler l'utilisation de la SMS Retriever API.
  * Permet de capter un message OTP sans aucune permission SMS (READ_SMS/RECEIVE_SMS).
- * Le cycle de vie est à usage unique (s'autodétruit après succès ou timeout de 5 minutes).
+ * Le cycle de vie est à usage unique (se désenregistre après succès ou expiration/timeout de 5 minutes).
  */
 class SmsRetrieverHelper(
     private val context: Context,
@@ -28,7 +28,7 @@ class SmsRetrieverHelper(
 
     /**
      * Démarre le client SMS Retriever de Google Play Services et enregistre
-     * le receiver d'écoute temporaire.
+     * le BroadcastReceiver d'écoute temporaire.
      */
     fun start() {
         if (isRegistered) {
@@ -49,7 +49,7 @@ class SmsRetrieverHelper(
     }
 
     /**
-     * Enregistre dynamiquement le BroadcastReceiver pour intercepter le signal de succès ou de timeout.
+     * Enregistre dynamiquement le BroadcastReceiver pour intercepter le signal de succès ou d'expiration (timeout).
      */
     private fun registerReceiver() {
         receiver = object : BroadcastReceiver() {
@@ -67,11 +67,11 @@ class SmsRetrieverHelper(
                                 Logger.info(TAG, "SMS d'OTP récupéré avec succès")
                                 onOtpReceived(message)
                             }
-                            stop() // Arrête le receiver après réception unique
+                            stop() // Désenregistre le receiver après une unique réception.
                         }
                         CommonStatusCodes.TIMEOUT -> {
                             Logger.info(TAG, "SMS Retriever expiré après 5 minutes")
-                            stop() // Arrête le receiver en cas de timeout
+                            stop() // Désenregistre le receiver en cas d'expiration.
                         }
                     }
                 }
@@ -80,8 +80,8 @@ class SmsRetrieverHelper(
 
         val filter = IntentFilter(SmsRetriever.SMS_RETRIEVED_ACTION)
         
-        // Sur Android 13+ (API 33+), le flag RECEIVER_NOT_EXPORTED est requis pour des raisons de sécurité
-        // puisque le broadcast est directement destiné à notre package par le service Google Play.
+        // Sur Android 13+ (API 33+), le drapeau (flag) RECEIVER_NOT_EXPORTED est requis pour des raisons de sécurité
+        // puisque le broadcast est directement destiné à notre package par les services Google Play.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
@@ -92,7 +92,7 @@ class SmsRetrieverHelper(
     }
 
     /**
-     * Libère proprement le BroadcastReceiver de l'activité.
+     * Désenregistre et libère proprement le BroadcastReceiver de l'activité.
      */
     fun stop() {
         if (isRegistered && receiver != null) {

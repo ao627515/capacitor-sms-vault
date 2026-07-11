@@ -15,7 +15,7 @@ import java.lang.ref.WeakReference
  * via startListening() / stopListening(). Il notifie le plugin Capacitor
  * à chaque SMS reçu via notifyListeners("smsReceived").
  *
- * WeakReference utilisée pour éviter les fuites mémoire si le plugin
+ * WeakReference utilisée pour éviter les fuites de mémoire si le plugin
  * est détruit avant le receiver.
  */
 class SmsReceiver : BroadcastReceiver() {
@@ -52,7 +52,7 @@ class SmsReceiver : BroadcastReceiver() {
         for (smsMessage in messages) {
             try {
                 val smsObj = JSObject().apply {
-                    // L'id n'est pas disponible via PDU — sera peuplé si besoin via ContentResolver
+                    // L'identifiant n'est pas disponible via PDU — il sera renseigné si nécessaire via le ContentResolver.
                     put("id", "")
                     put("address", smsMessage.displayOriginatingAddress ?: "")
                     put("body", smsMessage.messageBody ?: "")
@@ -71,7 +71,7 @@ class SmsReceiver : BroadcastReceiver() {
                 Logger.info(TAG, "SMS received from: ${smsMessage.displayOriginatingAddress} on subscription: $subscriptionId")
             } catch (e: Exception) {
                 Logger.error(TAG, "Failed to parse SMS PDU or notify listener", e)
-                // On continue avec les autres messages du même batch
+                // On continue avec les autres messages du même groupe de messages.
             }
         }
     }

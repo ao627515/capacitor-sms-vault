@@ -26,7 +26,7 @@ class SmsReaderTest {
     private lateinit var context: Context
     private lateinit var smsReader: SmsReader
 
-    // Provider SQLite en mémoire pour simuler la base SMS d'Android
+    // Provider SQLite en mémoire pour simuler la base de données des SMS d'Android.
     class MockSmsProvider : ContentProvider() {
         private lateinit var dbHelper: SQLiteOpenHelper
 
@@ -102,13 +102,13 @@ class SmsReaderTest {
         context = ApplicationProvider.getApplicationContext()
         smsReader = SmsReader(context)
         
-        // Enregistrer notre provider SQL simulé pour l'autorité "sms"
+        // Enregistrement de notre provider SQL simulé pour l'autorité "sms".
         val info = android.content.pm.ProviderInfo().apply {
             authority = "sms"
         }
         org.robolectric.Robolectric.buildContentProvider(MockSmsProvider::class.java).create(info)
         
-        // Nettoyer la base SMS avant chaque test
+        // Nettoyage de la table des SMS avant chaque test.
         context.contentResolver.delete(Telephony.Sms.CONTENT_URI, null, null)
     }
 
@@ -147,7 +147,7 @@ class SmsReaderTest {
         insertSms("0601020304", "Message un", 1000L)
         insertSms("0601020305", "Message deux", 2000L)
 
-        // Par défaut sans filtre, getSmsList filtre sur type = 1 (Inbox) et trie par date DESC
+        // Par défaut sans filtre, getSmsList filtre sur le type 1 (INBOX) et trie par date décroissante (DESC).
         val messages = smsReader.getSmsList(null, null)
         
         assertEquals(2, messages.length())
@@ -168,7 +168,7 @@ class SmsReaderTest {
         insertSms("0601020304", "Inbox SMS", 1000L, type = Telephony.Sms.MESSAGE_TYPE_INBOX)
         insertSms("0601020305", "Sent SMS", 2000L, type = Telephony.Sms.MESSAGE_TYPE_SENT)
 
-        // Filtrer sur SENT (type 2)
+        // Filtrage sur SENT (type 2).
         val filter = JSObject().apply {
             put("type", 2)
         }
@@ -232,7 +232,7 @@ class SmsReaderTest {
         }
         
         val messages = smsReader.getSmsList(filter, null)
-        assertEquals(2, messages.length()) // TEST_OTP et BANK_NOTIF correspondent
+        assertEquals(2, messages.length()) // TEST_OTP et BANK_NOTIF correspondent au filtre.
         assertEquals("BANK_NOTIF", messages.getJSONObject(0).getString("address"))
         assertEquals("TEST_OTP", messages.getJSONObject(1).getString("address"))
     }
@@ -260,7 +260,7 @@ class SmsReaderTest {
         insertSms("0601020304", "Msg 3", 3000L)
         insertSms("0601020304", "Msg 4", 4000L)
 
-        // 1. Tri date_asc + pagination
+        // 1. Tri date_asc et pagination.
         val filterAsc = JSObject().apply {
             put("orderBy", "date_asc")
             put("indexFrom", 1)
@@ -272,7 +272,7 @@ class SmsReaderTest {
         assertEquals("Msg 2", messagesAsc.getJSONObject(0).getString("body")) // index 1 (deuxième plus ancien)
         assertEquals("Msg 3", messagesAsc.getJSONObject(1).getString("body")) // index 2
 
-        // 2. Tri date_desc (défaut) + pagination
+        // 2. Tri date_desc (défaut) et pagination.
         val filterDesc = JSObject().apply {
             put("indexFrom", 1)
             put("maxCount", 2)
@@ -290,13 +290,13 @@ class SmsReaderTest {
         insertSms("0601020305", "Code: 2222", 2000L)
         insertSms("0601020306", "Pas de code", 3000L)
 
-        // 1. Sans filtre regex (chemin SQL direct)
+        // 1. Sans filtre par expression régulière (chemin SQL direct).
         val filterSql = JSObject().apply {
             put("address", "0601020304")
         }
         assertEquals(1, smsReader.getCount(filterSql))
 
-        // 2. Avec regex (chemin d'évaluation en mémoire)
+        // 2. Avec expression régulière (chemin d'évaluation en mémoire).
         val filterRegex = JSObject().apply {
             put("bodyRegex", "Code: \\d{4}")
         }
@@ -306,6 +306,7 @@ class SmsReaderTest {
     @Test
     fun testGetSmsList_WithNewColumnsAndFilters() {
         // Insérer un SMS avec seen=0, status=0 (COMPLETE), error_code=10, locked=1, service_center="+22689001234"
+        // pour tester la projection et les filtres associés.
         insertSms(
             address = "0601020304",
             body = "SMS de test avec nouvelles colonnes",

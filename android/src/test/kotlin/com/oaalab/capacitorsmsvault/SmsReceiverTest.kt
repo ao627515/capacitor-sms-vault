@@ -81,7 +81,7 @@ class SmsReceiverTest {
             pluginRef = WeakReference(mockPlugin)
         }
         
-        // Réinitialiser les paramètres du shadow avant chaque test
+        // Réinitialisation des paramètres du shadow avant chaque test.
         ShadowSmsMessage.mockAddress = null
         ShadowSmsMessage.mockBody = null
         ShadowSmsMessage.mockTimestamp = 0L
@@ -91,13 +91,13 @@ class SmsReceiverTest {
 
     @Test
     fun testOnReceive_SmsReceivedAction_Success() {
-        // Configurer les valeurs retournées par notre shadow
+        // Configuration des valeurs retournées par notre shadow.
         ShadowSmsMessage.mockAddress = "0601020304"
         ShadowSmsMessage.mockBody = "Votre code d'activation est 4567."
         ShadowSmsMessage.mockTimestamp = 1234567890L
         ShadowSmsMessage.mockServiceCenter = "+22689001234"
 
-        // Créer un Intent avec des PDUs fictifs
+        // Création d'un Intent avec des PDU fictifs.
         val intent = Intent(Telephony.Sms.Intents.SMS_RECEIVED_ACTION).apply {
             putExtra("pdus", arrayOf(byteArrayOf(1)))
             putExtra("format", "3gpp")

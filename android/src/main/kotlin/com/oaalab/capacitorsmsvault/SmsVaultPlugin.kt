@@ -32,8 +32,8 @@ import java.lang.ref.WeakReference
 /**
  * Plugin Capacitor principal pour capacitor-sms-vault.
  *
- * Ce fichier est le pont entre la couche JavaScript/TypeScript et le système Android.
- * Il ne contient aucune logique métier — toute la logique est déléguée à :
+ * Ce fichier constitue le pont entre la couche JavaScript/TypeScript et le système Android.
+ * Il ne contient aucune logique métier — celle-ci est déléguée à :
  *   - SmsReader            : lecture de l'historique via ContentResolver
  *   - SmsReceiver          : interception des SMS entrants via BroadcastReceiver
  *   - SmsRetrieverHelper   : interception des codes OTP via SMS Retriever API
@@ -67,9 +67,10 @@ class SmsVaultPlugin : Plugin() {
     companion object {
         private const val TAG = "SmsVaultPlugin"
 
-        // Intent action for changing default SMS app on Android 6-9
+        // Action d'Intent pour changer l'application SMS par défaut sur Android 6-9
         private const val ACTION_CHANGE_DEFAULT_SMS_APP =
             "android.provider.Telephony.ACTION_CHANGE_DEFAULT_SMS_APP"
+        // Nom du paramètre extra pour le package de l'application
         private const val EXTRA_PACKAGE_NAME =
             "android.provider.Telephony.EXTRA_PACKAGE_NAME"
     }
@@ -79,7 +80,7 @@ class SmsVaultPlugin : Plugin() {
     private lateinit var smsReader: SmsReader
     private var smsRetrieverHelper: SmsRetrieverHelper? = null
 
-    // Cache pour la déduplication d'événements SMS
+    // Cache pour la déduplication des événements SMS
     private val recentSmsIds = BoundedSet<String>(100)
     private val recentSmsFingerprints = BoundedSet<String>(100)
 
@@ -114,7 +115,7 @@ class SmsVaultPlugin : Plugin() {
     }
 
     override fun handleOnDestroy() {
-        // Nettoyage : désenregistrer le receiver et l'observer si l'activité est détruite
+        // Nettoyage : désenregistrement du receiver et de l'observer si l'activité est détruite
         if (isListening) {
             try {
                 context.unregisterReceiver(smsReceiver)
@@ -185,7 +186,7 @@ class SmsVaultPlugin : Plugin() {
      */
     @PluginMethod
     override fun requestPermissions(call: PluginCall) {
-        // Si les permissions sont déjà accordées, on résout immédiatement
+        // Si les permissions sont déjà accordées, la promesse est résolue immédiatement
         val readState = getPermissionState("readSms")
         val receiveState = getPermissionState("receiveSms")
         val phoneState = getPermissionState("phone")
@@ -206,7 +207,7 @@ class SmsVaultPlugin : Plugin() {
             return
         }
 
-        // Sinon, demande via le framework Capacitor
+        // Sinon, demande des permissions via le framework Capacitor
         requestPermissionForAliases(arrayOf("readSms", "receiveSms", "phone", "sendSms"), call, "permissionsCallback")
     }
 
@@ -252,7 +253,7 @@ class SmsVaultPlugin : Plugin() {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Android 10+ : Utiliser RoleManager (recommandé et requis)
+            // Android 10+ : utilisation de RoleManager (recommandé et requis)
             val roleManager = context.getSystemService(Context.ROLE_SERVICE) as android.app.role.RoleManager
             if (roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_SMS)) {
                 val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_SMS)
@@ -261,7 +262,7 @@ class SmsVaultPlugin : Plugin() {
                 call.reject("ROLE_UNAVAILABLE", "SMS role is not available on this device")
             }
         } else {
-            // Android 6-9 : Utiliser l'ancien Intent Action
+            // Android 6-9 : utilisation de l'ancien Intent Action
             val intent = android.content.Intent(ACTION_CHANGE_DEFAULT_SMS_APP).apply {
                 putExtra(EXTRA_PACKAGE_NAME, context.packageName)
             }
@@ -371,12 +372,11 @@ class SmsVaultPlugin : Plugin() {
             recentSmsIds.clear()
             recentSmsFingerprints.clear()
 
-            // 1. Enregistrer le BroadcastReceiver
+            // 1. Enregistrement du BroadcastReceiver
             if (strategy == "broadcast" || strategy == "both") {
                 val filter = IntentFilter(Telephony.Sms.Intents.SMS_RECEIVED_ACTION).apply {
                     priority = IntentFilter.SYSTEM_HIGH_PRIORITY
                 }
-
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     context.registerReceiver(smsReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
                 } else {
@@ -385,7 +385,7 @@ class SmsVaultPlugin : Plugin() {
                 }
             }
 
-            // 2. Enregistrer le ContentObserver
+            // 2. Enregistrement du ContentObserver
             if (strategy == "observer" || strategy == "both") {
                 val observer = SmsContentObserver(Handler(Looper.getMainLooper()), context) {
                     handleSmsDbChange()
@@ -419,14 +419,14 @@ class SmsVaultPlugin : Plugin() {
         }
 
         try {
-            // Unregister BroadcastReceiver
+            // Désenregistrement du BroadcastReceiver
             try {
                 context.unregisterReceiver(smsReceiver)
             } catch (e: Exception) {
                 // Ignore
             }
 
-            // Unregister ContentObserver
+            // Désenregistrement du ContentObserver
             smsContentObserver?.let { observer ->
                 try {
                     context.contentResolver.unregisterContentObserver(observer)
@@ -810,7 +810,7 @@ class SmsVaultPlugin : Plugin() {
     }
 
     /**
-     * Structure de cache ordonnée avec taille limite.
+     * Structure de cache ordonnée avec une taille limite.
      */
     private class BoundedSet<T>(private val maxSize: Int) {
         private val set = LinkedHashSet<T>()
@@ -932,7 +932,7 @@ class SmsVaultPlugin : Plugin() {
             }
         } catch (e: Exception) {
             // En cas d'erreur de lecture, on considère que le SMS n'est pas verrouillé
-            // et on tente la suppression directe (best effort)
+            // et on tente la suppression directe (au mieux / best-effort).
         } finally {
             cursor?.close()
         }
@@ -1021,7 +1021,7 @@ class SmsVaultPlugin : Plugin() {
                 call.reject("SEND_FAILED", "Failed to send SMS directly: ${e.message}", e)
             }
         } else {
-            // Mode indirect : lance l'Intent système
+            // Mode indirect : lancement de l'Intent système.
             try {
                 val intent = Intent(Intent.ACTION_SENDTO).apply {
                     data = Uri.parse("smsto:$phoneNumber")
@@ -1087,10 +1087,10 @@ class SmsVaultPlugin : Plugin() {
 
                     val fingerprint = "$addressVal|$bodyVal"
 
-                    // Déduplication
+                    // Déduplication des messages
                     if (recentSmsIds.contains(idVal)) continue
                     if (recentSmsFingerprints.contains(fingerprint)) {
-                        // Déjà traité par le BroadcastReceiver, on retient l'ID
+                        // Déjà traité par le BroadcastReceiver, on retient l'identifiant.
                         recentSmsIds.add(idVal)
                         continue
                     }

@@ -1,6 +1,6 @@
 /**
- * Utility functions for date, string and format helpers.
- * This file has no dependencies on other modules.
+ * Fonctions utilitaires pour les dates, les chaînes de caractères et les formats.
+ * Ce fichier ne contient aucune dépendance vers d'autres modules.
  */
 
 export function escapeHtml(str) {

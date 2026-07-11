@@ -5,7 +5,7 @@ import type { PermissionState, PluginListenerHandle } from '@capacitor/core';
 // ─────────────────────────────────────────────
 
 /**
- * Types de boîte SMS Android — correspond aux valeurs
+ * Types de boîtes SMS Android — correspond aux valeurs
  * de la colonne `type` dans Telephony.Sms.
  */
 export enum MessageType {
@@ -26,7 +26,7 @@ export enum MessageType {
 }
 
 /**
- * Accusé de réception / statut de livraison du SMS.
+ * Accusé de réception ou statut de livraison du SMS.
  */
 export enum SmsDeliveryStatus {
   /** Aucun accusé de réception reçu */
@@ -64,9 +64,9 @@ export interface SmsMessage {
   creator?: string;
   /** Identifiant du contact associé à l'expéditeur */
   person?: string;
-  /** Identifiant d'abonnement SIM réceptrice (Android uniquement) */
+  /** Identifiant de l'abonnement SIM réceptrice (Android uniquement) */
   subscriptionId?: number;
-  /** Indique si le message a été vu dans la liste/notification (Android uniquement) */
+  /** Indique si le message a été vu (liste ou notification) (Android uniquement) */
   seen?: boolean;
   /** Statut de livraison (Android uniquement) */
   status?: SmsDeliveryStatus;
@@ -83,7 +83,7 @@ export interface PermissionStatus {
   readSms: PermissionState;
   /** État de la permission RECEIVE_SMS */
   receiveSms: PermissionState;
-  /** État de la permission de lecture d'état de téléphone (SIM / numéro) */
+  /** État de la permission de lecture de l'état du téléphone (carte SIM / numéro) */
   phone: PermissionState;
   /** État de la permission d'envoi de SMS (direct) */
   sendSms: PermissionState;
@@ -94,7 +94,7 @@ export interface SimCardInfo {
   carrierName: string;
   /** Code pays ISO à 2 lettres (ex: fr) */
   countryIso: string;
-  /** Numéro de téléphone de la ligne si provisionné (peut être vide) */
+  /** Numéro de téléphone de la ligne s'il est provisionné (peut être vide) */
   phoneNumber: string;
   /** Index du slot SIM physique (0, 1, etc.) */
   simSlotIndex: number;
@@ -120,8 +120,8 @@ export interface SimProfile {
 /**
  * Sélection des colonnes à retourner dans SmsMessage.
  * Omettre une colonne réduit la quantité de données
- * transférée entre la couche native et le JS.
- * Par défaut toutes les colonnes obligatoires sont retournées.
+ * transférées entre la couche native et la couche JavaScript.
+ * Par défaut, toutes les colonnes obligatoires sont retournées.
  */
 export interface SmsProjection {
   threadId?: boolean;
@@ -196,12 +196,12 @@ export interface SmsVaultPlugin {
 
   /**
    * Vérifie si l'application est l'application SMS par défaut du système.
-   * Sur Android 10+, seule l'app par défaut peut lire l'historique SMS complet.
+   * Sur Android 10+, seule l'application par défaut peut lire l'historique SMS complet.
    */
   isDefaultSmsApp(): Promise<{ isDefault: boolean }>;
 
   /**
-   * Ouvre le dialogue système pour demander à l'utilisateur de définir
+   * Ouvre la boîte de dialogue système pour demander à l'utilisateur de définir
    * cette application comme application SMS par défaut.
    * Retourne le statut après la décision de l'utilisateur.
    */
@@ -236,8 +236,8 @@ export interface SmsVaultPlugin {
    * sans mapping — utile pour le debug ou l'accès à des colonnes
    * non exposées par l'API standard (sub_id, service_center, etc.).
    *
-   * ⚠️ Performance : ne pas utiliser sur de grands volumes.
-   * Préférer getSmsList() avec projection pour un usage en production.
+   * ⚠️ Performance : à éviter sur de grands volumes de messages.
+   * Préférer l'utilisation de getSmsList() avec une projection pour un usage en production.
    *
    * @param options.filter - Mêmes critères que getSmsList
    */
@@ -273,7 +273,7 @@ export interface SmsVaultPlugin {
 
   /**
    * Démarre la détection d'OTP via la SMS Retriever API.
-   * L'API attend la réception d'un unique message de format spécifique avec la clé de hachage de l'application.
+   * L'API attend la réception d'un unique message au format spécifique contenant la clé de hachage de l'application.
    * Ne requiert aucune permission SMS sensible.
    * 
    * ⚠️ L'écoute expire automatiquement après 5 minutes. Passé ce délai, relancez la méthode si nécessaire.
@@ -300,7 +300,7 @@ export interface SmsVaultPlugin {
   getSimInfo(): Promise<{ simCards: SimCardInfo[] }>;
 
   /**
-   * Récupère le profil détaillé des cartes SIM de l'appareil (état double SIM et liste).
+   * Récupère le profil détaillé des cartes SIM de l'appareil (état double SIM et liste des cartes actives).
    * Requiert la permission 'phone'.
    */
   getDeviceSimProfile(): Promise<SimProfile>;
@@ -319,13 +319,13 @@ export interface SmsVaultPlugin {
 
   /**
    * Démarre l'écoute d'un message de validation via l'API SMS User Consent de Google.
-   * Affiche un pop-up système de consentement à la réception du SMS.
+   * Affiche une boîte de dialogue système de consentement à la réception du SMS.
    * 
    * ⚠️ L'écoute expire automatiquement après 5 minutes. Passé ce délai, relancez la méthode si nécessaire.
    *
    * @param options.senderAddress - Numéro de l'expéditeur attendu (format E.164, ex: +22670000000). 
-   * Si fourni, le popup ne s'affiche que pour ce numéro, ce qui améliore la sécurité. 
-   * Si absent, tout SMS contenant un code alphanumérique de 4 à 10 caractères déclenchera le popup.
+   * Si fourni, la boîte de dialogue ne s'affiche que pour ce numéro, ce qui améliore la sécurité. 
+   * Si absent, tout SMS contenant un code alphanumérique de 4 à 10 caractères déclenchera la boîte de dialogue.
    */
   startSmsUserConsent(options?: { senderAddress?: string }): Promise<void>;
 
@@ -354,8 +354,8 @@ export interface SmsVaultPlugin {
 
   /**
    * Marque un message SMS comme lu (définit le champ 'read' à 1).
-   * Sur Android 10+, cette opération requiert d'être configuré comme l'application SMS par défaut.
-   * Remarque : marque également le message comme vu.
+   * Sur Android 10+, cette opération requiert que l'application soit configurée comme l'application SMS par défaut.
+   * Remarque : cette opération marque également le message comme vu.
    * 
    * @param options.id - Identifiant unique du SMS à mettre à jour
    */
@@ -363,7 +363,7 @@ export interface SmsVaultPlugin {
 
   /**
    * Marque un message SMS comme vu (définit le champ 'seen' à 1).
-   * Sur Android 10+, cette opération requiert d'être configuré comme l'application SMS par défaut.
+   * Sur Android 10+, cette opération requiert que l'application soit configurée comme l'application SMS par défaut.
    * 
    * @param options.id - Identifiant unique du SMS à mettre à jour
    */
@@ -371,7 +371,7 @@ export interface SmsVaultPlugin {
 
   /**
    * Supprime un SMS par son identifiant unique.
-   * ⚠️ Cette méthode requiert obligatoirement d'être configuré comme l'application SMS par défaut.
+   * ⚠️ Cette méthode requiert obligatoirement que l'application soit configurée comme l'application SMS par défaut.
    * 
    * @param options.id - Identifiant unique du SMS à supprimer
    * @param options.force - Si true, déverrouille le message avant de le supprimer si nécessaire. Défaut : false.
@@ -383,7 +383,7 @@ export interface SmsVaultPlugin {
 
   /**
    * Verrouille ou déverrouille un SMS par son identifiant unique.
-   * ⚠️ Cette méthode requiert obligatoirement d'être configuré comme l'application SMS par défaut.
+   * ⚠️ Cette méthode requiert obligatoirement que l'application soit configurée comme l'application SMS par défaut.
    *
    * @param options.id - Identifiant unique du SMS à verrouiller/déverrouiller
    * @param options.locked - true pour verrouiller, false pour déverrouiller
