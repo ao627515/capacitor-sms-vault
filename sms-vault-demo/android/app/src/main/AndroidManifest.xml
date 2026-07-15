@@ -43,5 +43,10 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <!-- capacitor-sms-vault : requis pour F4 (interception temps réel) -->
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <!-- capacitor-sms-vault : requis pour F2 (envoi de SMS) -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <!-- capacitor-sms-vault : requis pour getSimInfo et getDeviceSimProfile (lecture SIM) -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
 
 </manifest>
