@@ -2,7 +2,7 @@
   "name": "@ao627515/capacitor-sms-vault",
   "version": "1.0.0",
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   },
   "description": "Generalist Capacitor plugin for reading, intercepting and exporting SMS on AndroidInstalling dependencies.",
   "main": "dist/plugin.cjs.js",
