@@ -1,6 +1,6 @@
 {
   "name": "@ao627515/capacitor-sms-vault",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "publishConfig": {
     "access": "restricted"
   },
